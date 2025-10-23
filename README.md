@@ -5,13 +5,18 @@ A complete solution for translating **25+ document formats** using Azure Transla
 ## 🎯 Features
 
 - **🌐 Web UI**: User-friendly interface for uploading documents and running translations
-- **25+ File Format Support**: PDF, Microsoft Office (Word/Excel/PowerPoint), OpenDocument, text files, HTML, Markdown, email messages, localization files, and CSV/TSV data
+- **25+ File Format Support**: PDF, Microsoft Office (Word/Excel/PowerPoint), OpenDocument, text files, HTML, Markdown, email messages, localization files, CSV/TSV data, and images
 - **Single Document Translation**: Translate one document at a time with auto language detection
 - **Batch Translation**: Process multiple documents simultaneously to multiple target languages
-- **OCR + Translation Pipeline**: Convert scanned/image documents to searchable format before translation
+- **OCR + Translation Pipeline**: Extract text from scanned/image documents (including JPG, PNG, TIFF), then translate - supports all 25+ file formats
+- **Source Language Selection**: Choose from 100+ source languages or use auto-detect
+- **Detected Language Display**: Shows detected source language for each document in results and logs
 - **Real-time Progress Tracking**: Monitor translation jobs with live status updates
-- **Multiple Language Support**: Translate to 20+ popular languages (100+ total supported)
-- **Visual File Type Icons**: Dynamic icons for each supported format (📘 Word, 📗 Excel, 📙 PowerPoint, 🌐 HTML, etc.)
+- **Multiple Language Support**: Translate to 100+ languages with easy language selection
+- **Visual File Type Icons**: Dynamic icons for each supported format (📘 Word, 📗 Excel, 📙 PowerPoint, 🌐 HTML, 📷 Images, etc.)
+- **Comprehensive Logging**: Detailed logs saved to `translation_app.log` for troubleshooting and monitoring
+- **Managed Identity Support**: Optional Azure Managed Identity authentication for production environments
+- **Smart Download Buttons**: Download buttons automatically show correct file type (not just "PDF")
 
 ## Prerequisites
 
@@ -93,24 +98,51 @@ The easiest way to use the translation services:
    ```powershell
    python app.py
    ```
+   
+   **Alternative**: Double-click `start_web_ui.bat` (Windows) which will:
+   - Create virtual environment if needed
+   - Install dependencies if needed
+   - Check for .env file
+   - Start the server automatically
 
 2. **Open your browser:**
    Navigate to `http://localhost:5000`
 
 3. **Use the interface:**
-   - Select translation type (Single, Batch, or OCR)
-   - Upload your PDF file(s)
-   - Choose target language(s)
+   
+   **Step 1: Choose Translation Type**
+   - **Single Translation**: One document → One language (quick translations)
+   - **Batch Translation**: Multiple documents → Multiple languages (bulk processing)
+   - **OCR + Translation**: Scanned/image documents → Extract text → Translate
+
+   **Step 2: Upload Files**
+   - Drag and drop files, or click "Browse Files"
+   - Supports all 25+ formats (PDF, Office docs, images, text, HTML, etc.)
+   - Max 100MB per file
+   - Single/OCR: 1 file only | Batch: Multiple files
+
+   **Step 3: Select Languages**
+   - Source: Choose specific language or "Auto-detect" (recommended)
+   - Target: Select one or more languages from 100+ options
+   - Use search box to find languages quickly
+
+   **Step 4: Start Translation**
    - Click "Start Translation"
-   - Download your translated files
+   - Watch real-time progress with live updates
+   - View detected source language in results (shown per document)
+   - Download translated files when complete
 
 **Web UI Features:**
-- ✅ Drag-and-drop file upload
-- ✅ Real-time progress tracking
-- ✅ Support for all three translation types
-- ✅ Easy language selection from 20+ languages
+- ✅ Drag-and-drop file upload for all 25+ formats
+- ✅ Source language selection (100+ languages) or auto-detect
+- ✅ Detected language display in results (per document for batch)
+- ✅ Real-time progress tracking with detailed status
+- ✅ Support for all three translation types (Single, Batch, OCR)
+- ✅ Easy target language selection from 100+ languages with search
+- ✅ Smart download buttons showing actual file type
 - ✅ One-click downloads of results
 - ✅ Mobile-responsive design
+- ✅ Visual file type icons for uploaded documents
 
 ### Option 2: Command-Line Scripts
 
@@ -127,6 +159,7 @@ python single_document_translation.py
 **Configuration** (edit the script's `main()` function):
 ```python
 input_file = "sample.docx"  # Your document file path (any supported format)
+source_language = None       # Optional: Specify source (e.g., "en") or None for auto-detect
 target_language = "es"       # Target language code
 ```
 
@@ -164,6 +197,7 @@ python batch_translation.py
 **Configuration** (edit the script's `main()` function):
 ```python
 input_folder = "input_documents"             # Folder with document files (any supported format)
+source_language = None                       # Optional: Specify source (e.g., "en") or None for auto-detect
 target_languages = ["es", "fr", "de"]        # List of target languages
 output_base_folder = "translated_output"     # Output folder
 ```
@@ -207,6 +241,7 @@ input_file = "scanned_doc.pdf"                # Any supported format
 # input_file = "scan.jpg"                     # Image file
 # input_file = "document.docx"                # Word with images
 # input_file = "presentation.pptx"            # PowerPoint
+source_language = None                        # Optional: Specify source or None for auto-detect
 target_language = "es"                        # Target language
 output_folder = "ocr_translated_output"       # Output folder
 ```
@@ -264,6 +299,7 @@ Error: Failed to upload to blob storage
 - Verify storage connection string is correct
 - Ensure storage account has blob service enabled
 - Check firewall settings allow your IP
+- Verify container permissions allow blob access
 
 #### 4. Translation Fails
 
@@ -277,6 +313,47 @@ Error: Translation failed
 - Unsupported file format (check the supported list above)
 - Insufficient quota/credits
 - Document contains protected content or DRM
+
+#### 5. Permission/Access Level Errors
+
+```
+InvalidDocumentAccessLevel: Azure Translator cannot access blob storage
+```
+
+**Solution**: This typically occurs when SAS tokens have insufficient permissions
+- Container public access should be set to `blob` level
+- SAS tokens need both `read` and `list` permissions
+- This is automatically handled by the scripts
+- If using custom storage setup, verify these settings
+
+#### 6. OCR Translation Issues
+
+**For scanned or image documents:**
+- Use the "OCR + Translation" mode (not Single or Batch)
+- Supported image formats: JPG, PNG, TIFF, BMP
+- Ensure Azure Document Intelligence is configured in `.env`
+- Check that document quality is sufficient for text recognition
+
+#### 7. Web UI Not Starting
+
+```
+Error: Address already in use
+```
+
+**Solution**: Port 5000 is already in use
+```powershell
+# Find and stop the process using port 5000
+netstat -ano | findstr :5000
+taskkill /PID <process-id> /F
+```
+
+#### 8. File Download Issues
+
+**Downloads not working or showing wrong file type:**
+- Check browser console for JavaScript errors
+- Verify files exist in `outputs/` folder
+- Clear browser cache and try again
+- Ensure file permissions allow reading from outputs folder
 
 ### Getting Azure Credentials
 
@@ -336,7 +413,201 @@ Azure Translator supports 100+ languages. Common codes:
 
 Full list: https://learn.microsoft.com/azure/cognitive-services/translator/language-support
 
+## 🔐 Managed Identity Support
+
+The application supports **Azure Managed Identity** for secure authentication in Azure-hosted environments (Azure App Service, Azure Functions, Azure VMs).
+
+**Benefits:**
+- ✅ No credentials stored in code or configuration files
+- ✅ Automatic credential rotation
+- ✅ Enhanced security for production deployments
+- ✅ Simplified credential management
+- ✅ Better compliance and audit trail with Azure AD
+
+### Authentication Methods
+
+**Local Development (Key-Based):**
+- Uses `AZURE_STORAGE_CONNECTION_STRING` or `AZURE_STORAGE_ACCOUNT_KEY`
+- Generates SAS tokens for blob access
+- Best for local development and testing
+
+**Production (Managed Identity):**
+- Uses Azure Managed Identity credentials
+- No SAS tokens needed - direct authentication
+- Best for Azure App Service, Container Apps, VMs
+- No storage keys required
+
+### Setup for Managed Identity (Production)
+
+**Step 1: Enable System-Assigned Managed Identity**
+
+For Azure App Service:
+```bash
+az webapp identity assign \
+  --name <your-app-name> \
+  --resource-group <your-resource-group>
+```
+
+For Azure Container Apps:
+```bash
+az containerapp identity assign \
+  --name <your-app-name> \
+  --resource-group <your-resource-group> \
+  --system-assigned
+```
+
+Save the **Principal ID** from the output - you'll need it in Step 2.
+
+**Step 2: Assign Storage Blob Data Contributor Role**
+
+Via Azure Portal:
+1. Navigate to your Storage Account
+2. Click **Access Control (IAM)**
+3. Click **+ Add** → **Add role assignment**
+4. Select **Storage Blob Data Contributor** role
+5. Select **Managed identity** and find your app
+6. Click **Select** → **Review + assign**
+
+Via Azure CLI:
+```bash
+# Get storage account resource ID
+STORAGE_ID=$(az storage account show \
+  --name <storage-account-name> \
+  --resource-group <storage-resource-group> \
+  --query id --output tsv)
+
+# Assign role using Principal ID from Step 1
+az role assignment create \
+  --assignee <principal-id> \
+  --role "Storage Blob Data Contributor" \
+  --scope $STORAGE_ID
+```
+
+**Step 3: Configure Environment Variables**
+
+In your Azure service, set these environment variables:
+
+```bash
+# Required
+AZURE_TRANSLATOR_ENDPOINT=https://your-translator.cognitiveservices.azure.com/
+AZURE_TRANSLATOR_KEY=your-key
+AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT=https://your-doc-intel.cognitiveservices.azure.com/
+AZURE_DOCUMENT_INTELLIGENCE_KEY=your-key
+AZURE_STORAGE_ACCOUNT_NAME=your-storage-name
+
+# Enable Managed Identity
+USE_MANAGED_IDENTITY=true
+
+# NOT required with Managed Identity (omit these):
+# AZURE_STORAGE_CONNECTION_STRING
+# AZURE_STORAGE_ACCOUNT_KEY
+```
+
+**Step 4: Deploy and Test**
+
+Deploy your application and verify authentication in logs:
+```
+Using Azure Managed Identity for authentication
+```
+
+### Auto-Detection
+
+The application automatically chooses authentication method:
+- If `AZURE_STORAGE_CONNECTION_STRING` is set → Uses key-based auth
+- If `AZURE_STORAGE_CONNECTION_STRING` is NOT set → Uses Managed Identity
+- Can override with `USE_MANAGED_IDENTITY=true/false`
+
+### Migration from Key-Based to Managed Identity
+
+**Current (Local Development):**
+```env
+AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=https;...
+USE_MANAGED_IDENTITY=false  # or omit
+```
+
+**New (Azure Production):**
+```env
+AZURE_STORAGE_ACCOUNT_NAME=your-storage-name
+USE_MANAGED_IDENTITY=true
+# Remove AZURE_STORAGE_CONNECTION_STRING and AZURE_STORAGE_ACCOUNT_KEY
+```
+
+### Troubleshooting Managed Identity
+
+**"DefaultAzureCredential failed to retrieve a token"**
+- Verify Managed Identity is enabled on your Azure resource
+- Check role assignment (Storage Blob Data Contributor)
+- Wait 5-10 minutes for role propagation
+
+**"This request is not authorized"**
+- Ensure role is **Storage Blob Data Contributor** (not just Reader)
+- Verify role assigned to correct Managed Identity
+
+**For Local Development:**
+- Managed Identity only works in Azure environments
+- Use `USE_MANAGED_IDENTITY=false` and connection string for local testing
+
+## 📊 Logging and Monitoring
+
+The application includes comprehensive logging for troubleshooting and monitoring:
+
+**Log File:** `translation_app.log` (created automatically)
+
+**What's Logged:**
+- ✅ Translation job start/completion with job IDs
+- ✅ Detected source language for each document
+- ✅ Target languages selected
+- ✅ File uploads and formats
+- ✅ Container creation and blob operations
+- ✅ Errors with detailed stack traces
+- ✅ Processing times and progress updates
+
+**Log Format:**
+```
+2025-10-23 14:30:45 - app - INFO - Job abc123: ✓ Source language detected: auto-detected
+2025-10-23 14:30:45 - app - INFO - Job abc123: → Target language: es
+2025-10-23 14:31:12 - app - INFO - Job abc123: Completed successfully
+```
+
+**Viewing Logs:**
+- Console output shows real-time progress
+- Check `translation_app.log` for detailed history
+- Logs include emoji indicators (✓, →, ✗) for easy scanning
+
 ## Advanced Configuration
+
+### Implementation Details
+
+**Authentication Architecture:**
+
+The application uses auto-detection to choose the authentication method:
+
+```python
+def __init__(self, use_managed_identity=None):
+    # Auto-detect authentication method
+    if use_managed_identity is None:
+        use_managed_identity = not bool(self.storage_connection_string)
+    
+    self.use_managed_identity = use_managed_identity
+```
+
+**Key-Based Authentication Flow:**
+1. `BlobServiceClient.from_connection_string()` uses storage keys
+2. SAS tokens generated for source and target containers
+3. URLs include SAS tokens: `https://account.blob.core.windows.net/container?sv=2021...`
+4. Azure Translator accesses blobs using SAS token permissions
+
+**Managed Identity Flow:**
+1. `DefaultAzureCredential()` authenticates using Azure Managed Identity
+2. `BlobServiceClient` uses credential directly (no keys)
+3. No SAS tokens generated
+4. Azure Translator accesses blobs using system identity
+5. Plain URLs without SAS tokens: `https://account.blob.core.windows.net/container/blob`
+
+**Environment Variable Precedence:**
+- If `AZURE_STORAGE_CONNECTION_STRING` is set → Key-based authentication
+- If `AZURE_STORAGE_CONNECTION_STRING` is NOT set → Managed Identity
+- Can be overridden with explicit `USE_MANAGED_IDENTITY=true/false`
 
 ### Custom Storage Containers
 
