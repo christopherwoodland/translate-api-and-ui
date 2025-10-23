@@ -6,10 +6,12 @@ then translates the searchable PDF using Azure Translator Service.
 
 import os
 import time
+import logging
 from azure.ai.formrecognizer import DocumentAnalysisClient
 from azure.ai.translation.document import DocumentTranslationClient, DocumentTranslationInput, TranslationTarget
 from azure.core.credentials import AzureKeyCredential
-from azure.storage.blob import BlobServiceClient, generate_blob_sas, BlobSasPermissions
+from azure.storage.blob import BlobServiceClient, generate_blob_sas, generate_container_sas, BlobSasPermissions, ContainerSasPermissions
+from azure.identity import DefaultAzureCredential, ManagedIdentityCredential
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from io import BytesIO
@@ -17,10 +19,23 @@ from io import BytesIO
 # Load environment variables
 load_dotenv()
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
+
 
 class OCRTranslationPipeline:
-    def __init__(self):
-        """Initialize the OCR and translation pipeline with Azure credentials."""
+    def __init__(self, use_managed_identity=None):
+        """Initialize the OCR and translation pipeline with Azure credentials.
+        
+        Args:
+            use_managed_identity: If True, use Managed Identity. If False, use keys.
+                                 If None, auto-detect based on whether connection string is present.
+        """
         # Document Intelligence credentials
         self.doc_intel_endpoint = os.getenv("AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT")
         self.doc_intel_key = os.getenv("AZURE_DOCUMENT_INTELLIGENCE_KEY")
@@ -34,11 +49,17 @@ class OCRTranslationPipeline:
         self.storage_account_name = os.getenv("AZURE_STORAGE_ACCOUNT_NAME")
         self.storage_account_key = os.getenv("AZURE_STORAGE_ACCOUNT_KEY")
         
+        # Auto-detect authentication method if not specified
+        if use_managed_identity is None:
+            use_managed_identity = not bool(self.storage_connection_string)
+        
+        self.use_managed_identity = use_managed_identity
+        
         # Validate required credentials
         if not all([
             self.doc_intel_endpoint, self.doc_intel_key,
             self.translator_endpoint, self.translator_key,
-            self.storage_connection_string
+            self.storage_account_name
         ]):
             raise ValueError("Missing required Azure credentials. Please check your .env file.")
         
@@ -53,9 +74,27 @@ class OCRTranslationPipeline:
             AzureKeyCredential(self.translator_key)
         )
         
-        self.blob_service_client = BlobServiceClient.from_connection_string(
-            self.storage_connection_string
-        )
+        # Initialize blob service client based on authentication method
+        account_url = f"https://{self.storage_account_name}.blob.core.windows.net"
+        
+        if self.use_managed_identity:
+            # Use Managed Identity (for Azure-hosted environments)
+            credential = DefaultAzureCredential()
+            self.blob_service_client = BlobServiceClient(
+                account_url=account_url,
+                credential=credential
+            )
+        else:
+            # Use connection string or account key (for local development)
+            if self.storage_connection_string:
+                self.blob_service_client = BlobServiceClient.from_connection_string(
+                    self.storage_connection_string
+                )
+            else:
+                self.blob_service_client = BlobServiceClient(
+                    account_url=account_url,
+                    credential=AzureKeyCredential(self.storage_account_key)
+                )
     
     def analyze_document_with_ocr(self, file_path):
         """
@@ -156,10 +195,12 @@ class OCRTranslationPipeline:
             # Create container if it doesn't exist
             container_client = self.blob_service_client.get_container_client(container_name)
             try:
-                # Set public access to blob level for Azure Translator to access
-                container_client.create_container(public_access='blob')
-            except Exception:
-                pass
+                # Create container without public access (SAS tokens will provide access)
+                container_client.create_container()
+            except Exception as e:
+                # Container might already exist, which is fine
+                if "ContainerAlreadyExists" not in str(e) and "already exists" not in str(e).lower():
+                    print(f"Container creation note: {e}")
             
             # Upload the file
             blob_name = os.path.basename(file_path)
@@ -168,31 +209,36 @@ class OCRTranslationPipeline:
             with open(file_path, "rb") as data:
                 blob_client.upload_blob(data, overwrite=True)
             
-            # Generate SAS token with proper permissions
-            sas_token = generate_blob_sas(
-                account_name=self.storage_account_name,
-                container_name=container_name,
-                blob_name=blob_name,
-                account_key=self.storage_account_key,
-                permission=BlobSasPermissions(read=True, list=True),
-                expiry=datetime.utcnow() + timedelta(hours=24)
-            )
-            
-            return f"{blob_client.url}?{sas_token}"
+            # Return URL (with or without SAS token based on authentication method)
+            if self.use_managed_identity:
+                # With Managed Identity, return plain URL
+                return blob_client.url
+            else:
+                # Generate SAS token with proper permissions
+                sas_token = generate_blob_sas(
+                    account_name=self.storage_account_name,
+                    container_name=container_name,
+                    blob_name=blob_name,
+                    account_key=self.storage_account_key,
+                    permission=BlobSasPermissions(read=True, list=True),
+                    expiry=datetime.utcnow() + timedelta(hours=24)
+                )
+                return f"{blob_client.url}?{sas_token}"
             
         except Exception as e:
             print(f"Error uploading to blob: {e}")
             raise
     
-    def translate_document(self, file_path, target_language, source_container="ocr-source", target_container="ocr-target"):
+    def translate_document(self, file_path, target_language, source_container="ocr-source", target_container="ocr-target", source_language=None):
         """
-        Translate a document using Azure Translator.
+        Translate the document.
         
         Args:
-            file_path: Path to the PDF file
+            file_path: Path to the searchable PDF to translate
             target_language: Target language code
             source_container: Source blob container name
             target_container: Target blob container name
+            source_language: Optional source language code (if not provided, auto-detect)
             
         Returns:
             URL of the translated document
@@ -200,33 +246,74 @@ class OCRTranslationPipeline:
         try:
             print(f"\nStarting translation to {target_language}...")
             
-            # Upload source document
-            source_url = self.upload_to_blob(file_path, source_container)
+            # Upload source document (this uploads the file but we need container URL)
+            self.upload_to_blob(file_path, source_container)
+            
+            # Generate source container URL with SAS token
+            # Note: Azure Translator needs container-level access, not individual blob URLs
+            if self.use_managed_identity:
+                # With Managed Identity, use container URL directly
+                source_url = f"https://{self.storage_account_name}.blob.core.windows.net/{source_container}"
+            else:
+                # Generate SAS token for source container using container-specific function
+                source_sas_token = generate_container_sas(
+                    account_name=self.storage_account_name,
+                    container_name=source_container,
+                    account_key=self.storage_account_key,
+                    permission=ContainerSasPermissions(read=True, list=True),
+                    expiry=datetime.utcnow() + timedelta(hours=24)
+                )
+                source_url = f"https://{self.storage_account_name}.blob.core.windows.net/{source_container}?{source_sas_token}"
             
             # Set up target container
             target_container_client = self.blob_service_client.get_container_client(target_container)
             try:
-                # Set public access to blob level for Azure Translator to write results
-                target_container_client.create_container(public_access='blob')
-            except Exception:
-                pass
+                # Create container without public access (SAS tokens will provide access)
+                target_container_client.create_container()
+                print(f"Created target container: {target_container}")
+            except Exception as e:
+                # Container might already exist, which is fine
+                if "ContainerAlreadyExists" in str(e) or "already exists" in str(e).lower():
+                    print(f"Target container {target_container} already exists")
+                    # Clear existing blobs to avoid TargetFileAlreadyExists error
+                    print("Clearing existing files from target container...")
+                    blobs = target_container_client.list_blobs()
+                    for blob in blobs:
+                        target_container_client.delete_blob(blob.name)
+                        print(f"  Deleted: {blob.name}")
+                else:
+                    print(f"Target container creation note: {e}")
             
-            target_sas = generate_blob_sas(
-                account_name=self.storage_account_name,
-                container_name=target_container,
-                blob_name="",
-                account_key=self.storage_account_key,
-                permission=BlobSasPermissions(write=True, read=True, list=True),
-                expiry=datetime.utcnow() + timedelta(hours=24)
-            )
-            
-            target_url = f"https://{self.storage_account_name}.blob.core.windows.net/{target_container}?{target_sas}"
+            # Generate target URL (with or without SAS token)
+            if self.use_managed_identity:
+                # With Managed Identity, no SAS token needed
+                target_url = f"https://{self.storage_account_name}.blob.core.windows.net/{target_container}"
+            else:
+                # Use container-specific SAS generation for proper permissions
+                target_sas = generate_container_sas(
+                    account_name=self.storage_account_name,
+                    container_name=target_container,
+                    account_key=self.storage_account_key,
+                    permission=ContainerSasPermissions(write=True, read=True, list=True),
+                    expiry=datetime.utcnow() + timedelta(hours=24)
+                )
+                target_url = f"https://{self.storage_account_name}.blob.core.windows.net/{target_container}?{target_sas}"
             
             # Start translation
-            translation_input = DocumentTranslationInput(
-                source_url=source_url,
-                targets=[TranslationTarget(target_url=target_url, language=target_language)]
-            )
+            # Build translation input with optional source language
+            translation_kwargs = {
+                'source_url': source_url,
+                'targets': [TranslationTarget(target_url=target_url, language=target_language)]
+            }
+            
+            # Add source language if specified (otherwise Azure will auto-detect)
+            if source_language:
+                translation_kwargs['source_language'] = source_language
+                print(f"Using specified source language: {source_language}")
+            else:
+                print("Using auto-detection for source language")
+            
+            translation_input = DocumentTranslationInput(**translation_kwargs)
             
             poller = self.translation_client.begin_translation([translation_input])
             print("Translation job submitted. Waiting for completion...")
@@ -236,7 +323,13 @@ class OCRTranslationPipeline:
             for document in result:
                 if document.status == "Succeeded":
                     print(f"✓ Translation completed successfully!")
-                    return document.translated_document_url
+                    # Note: Azure Document Translation API does not expose detected source language
+                    detected_lang = 'auto-detected'
+                    print(f"  Source language: {detected_lang}")
+                    return {
+                        'url': document.translated_document_url,
+                        'detected_source_language': detected_lang
+                    }
                 elif document.status == "Failed":
                     print(f"✗ Translation failed: {document.error.message if document.error else 'Unknown error'}")
                     return None
@@ -272,7 +365,7 @@ class OCRTranslationPipeline:
             print(f"Error downloading: {e}")
             raise
     
-    def process_document(self, input_pdf_path, target_language, output_folder="output"):
+    def process_document(self, input_pdf_path, target_language, output_folder="output", source_language=None):
         """
         Complete pipeline: OCR → Searchable PDF → Translation
         
@@ -280,6 +373,7 @@ class OCRTranslationPipeline:
             input_pdf_path: Path to the input PDF
             target_language: Target language code (e.g., 'es', 'fr', 'de')
             output_folder: Folder to save output files
+            source_language: Optional source language code (if not provided, auto-detect)
             
         Returns:
             Dictionary with paths to OCR and translated files
@@ -309,15 +403,25 @@ class OCRTranslationPipeline:
             # Step 3: Translate
             print("\nSTEP 3: Translation")
             print("-" * 70)
-            translated_url = self.translate_document(
+            translation_result = self.translate_document(
                 searchable_pdf_path,
-                target_language
+                target_language,
+                source_language=source_language
             )
             
             # Step 4: Download translated document
-            if translated_url:
+            if translation_result:
                 print("\nSTEP 4: Downloading Translated Document")
                 print("-" * 70)
+                
+                # Handle both old string format and new dict format
+                if isinstance(translation_result, dict):
+                    translated_url = translation_result['url']
+                    detected_lang = translation_result.get('detected_source_language', 'unknown')
+                else:
+                    translated_url = translation_result
+                    detected_lang = 'unknown'
+                
                 translated_pdf_path = os.path.join(
                     output_folder,
                     f"{base_name}_translated_{target_language}.pdf"
@@ -334,7 +438,8 @@ class OCRTranslationPipeline:
                 return {
                     'ocr_text': searchable_pdf_path.replace('.pdf', '_ocr_text.txt'),
                     'searchable_pdf': searchable_pdf_path,
-                    'translated_pdf': translated_pdf_path
+                    'translated_pdf': translated_pdf_path,
+                    'detected_source_language': detected_lang
                 }
             else:
                 print("\n✗ Translation failed")

@@ -5,9 +5,11 @@ Translates multiple PDF documents using Azure Translator Service batch processin
 
 import os
 import time
+import logging
 from azure.ai.translation.document import DocumentTranslationClient, DocumentTranslationInput, TranslationTarget
 from azure.core.credentials import AzureKeyCredential
-from azure.storage.blob import BlobServiceClient, generate_blob_sas, BlobSasPermissions, ContainerClient
+from azure.storage.blob import BlobServiceClient, generate_blob_sas, generate_container_sas, BlobSasPermissions, ContainerSasPermissions, ContainerClient
+from azure.identity import DefaultAzureCredential, ManagedIdentityCredential
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from pathlib import Path
@@ -15,27 +17,66 @@ from pathlib import Path
 # Load environment variables
 load_dotenv()
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
+
 
 class BatchDocumentTranslator:
-    def __init__(self):
-        """Initialize the batch translator with Azure credentials."""
+    def __init__(self, use_managed_identity=None):
+        """Initialize the batch translator with Azure credentials.
+        
+        Args:
+            use_managed_identity: If True, use Managed Identity. If False, use keys.
+                                 If None, auto-detect based on whether connection string is present.
+        """
         self.translator_endpoint = os.getenv("AZURE_TRANSLATOR_ENDPOINT")
         self.translator_key = os.getenv("AZURE_TRANSLATOR_KEY")
         self.storage_connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
         self.storage_account_name = os.getenv("AZURE_STORAGE_ACCOUNT_NAME")
         self.storage_account_key = os.getenv("AZURE_STORAGE_ACCOUNT_KEY")
         
+        # Auto-detect authentication method if not specified
+        if use_managed_identity is None:
+            use_managed_identity = not bool(self.storage_connection_string)
+        
+        self.use_managed_identity = use_managed_identity
+        
         # Validate required credentials
-        if not all([self.translator_endpoint, self.translator_key, self.storage_connection_string]):
+        if not all([self.translator_endpoint, self.translator_key, self.storage_account_name]):
             raise ValueError("Missing required Azure credentials. Please check your .env file.")
         
+        # Initialize translation client (currently always uses key)
         self.translation_client = DocumentTranslationClient(
             self.translator_endpoint,
             AzureKeyCredential(self.translator_key)
         )
-        self.blob_service_client = BlobServiceClient.from_connection_string(
-            self.storage_connection_string
-        )
+        
+        # Initialize blob service client based on authentication method
+        account_url = f"https://{self.storage_account_name}.blob.core.windows.net"
+        
+        if self.use_managed_identity:
+            # Use Managed Identity (for Azure-hosted environments)
+            credential = DefaultAzureCredential()
+            self.blob_service_client = BlobServiceClient(
+                account_url=account_url,
+                credential=credential
+            )
+        else:
+            # Use connection string or account key (for local development)
+            if self.storage_connection_string:
+                self.blob_service_client = BlobServiceClient.from_connection_string(
+                    self.storage_connection_string
+                )
+            else:
+                self.blob_service_client = BlobServiceClient(
+                    account_url=account_url,
+                    credential=AzureKeyCredential(self.storage_account_key)
+                )
     
     def upload_documents_to_blob(self, file_paths, container_name):
         """
@@ -52,11 +93,15 @@ class BatchDocumentTranslator:
             # Create container if it doesn't exist
             container_client = self.blob_service_client.get_container_client(container_name)
             try:
-                # Set public access to blob level for Azure Translator to access
-                container_client.create_container(public_access='blob')
+                # Create container without public access (SAS tokens will provide access)
+                container_client.create_container()
                 print(f"Created container: {container_name}")
             except Exception as e:
-                print(f"Container {container_name} already exists or creation failed: {e}")
+                # Container might already exist, which is fine
+                if "ContainerAlreadyExists" in str(e) or "already exists" in str(e).lower():
+                    print(f"Container {container_name} already exists")
+                else:
+                    print(f"Container creation note: {e}")
             
             uploaded_urls = []
             
@@ -82,7 +127,7 @@ class BatchDocumentTranslator:
             print(f"Error uploading documents: {e}")
             raise
     
-    def translate_batch(self, input_folder, target_languages, source_container="batch-source", target_container_prefix="batch-target"):
+    def translate_batch(self, input_folder, target_languages, source_container="batch-source", target_container_prefix="batch-target", source_language=None):
         """
         Translate multiple PDF documents in batch.
         
@@ -91,6 +136,7 @@ class BatchDocumentTranslator:
             target_languages: List of target language codes (e.g., ['es', 'fr', 'de'])
             source_container: Name of the source blob container
             target_container_prefix: Prefix for target blob container names
+            source_language: Optional source language code (if not provided, auto-detect)
             
         Returns:
             Dictionary of translation results by language
@@ -120,17 +166,20 @@ class BatchDocumentTranslator:
             print("\nUploading source documents...")
             self.upload_documents_to_blob(pdf_files, source_container)
             
-            # Generate SAS token for source container
-            source_sas_token = generate_blob_sas(
-                account_name=self.storage_account_name,
-                container_name=source_container,
-                blob_name="",
-                account_key=self.storage_account_key,
-                permission=BlobSasPermissions(read=True, list=True),
-                expiry=datetime.utcnow() + timedelta(hours=24)
-            )
-            
-            source_container_url = f"https://{self.storage_account_name}.blob.core.windows.net/{source_container}?{source_sas_token}"
+            # Generate source container URL (with or without SAS token)
+            if self.use_managed_identity:
+                # With Managed Identity, no SAS token needed - Translator uses system identity
+                source_container_url = f"https://{self.storage_account_name}.blob.core.windows.net/{source_container}"
+            else:
+                # Generate SAS token for source container using container-specific function
+                source_sas_token = generate_container_sas(
+                    account_name=self.storage_account_name,
+                    container_name=source_container,
+                    account_key=self.storage_account_key,
+                    permission=ContainerSasPermissions(read=True, list=True),
+                    expiry=datetime.utcnow() + timedelta(hours=24)
+                )
+                source_container_url = f"https://{self.storage_account_name}.blob.core.windows.net/{source_container}?{source_sas_token}"
             
             # Create translation targets for each language
             translation_targets = []
@@ -141,23 +190,36 @@ class BatchDocumentTranslator:
                 # Create target container
                 target_container_client = self.blob_service_client.get_container_client(target_container_name)
                 try:
-                    # Set public access to blob level for Azure Translator to write results
-                    target_container_client.create_container(public_access='blob')
+                    # Create container without public access (SAS tokens will provide access)
+                    target_container_client.create_container()
                     print(f"Created target container: {target_container_name}")
                 except Exception as e:
-                    print(f"Target container {target_container_name} already exists or creation failed: {e}")
+                    # Container might already exist, which is fine
+                    if "ContainerAlreadyExists" in str(e) or "already exists" in str(e).lower():
+                        print(f"Target container {target_container_name} already exists")
+                        # Clear existing blobs to avoid TargetFileAlreadyExists error
+                        print(f"Clearing existing files from {target_container_name}...")
+                        blobs = target_container_client.list_blobs()
+                        for blob in blobs:
+                            target_container_client.delete_blob(blob.name)
+                            print(f"  Deleted: {blob.name}")
+                    else:
+                        print(f"Target container creation note: {e}")
                 
-                # Generate SAS token for target container
-                target_sas_token = generate_blob_sas(
-                    account_name=self.storage_account_name,
-                    container_name=target_container_name,
-                    blob_name="",
-                    account_key=self.storage_account_key,
-                    permission=BlobSasPermissions(write=True, read=True, list=True),
-                    expiry=datetime.utcnow() + timedelta(hours=24)
-                )
-                
-                target_container_url = f"https://{self.storage_account_name}.blob.core.windows.net/{target_container_name}?{target_sas_token}"
+                # Generate target container URL (with or without SAS token)
+                if self.use_managed_identity:
+                    # With Managed Identity, no SAS token needed
+                    target_container_url = f"https://{self.storage_account_name}.blob.core.windows.net/{target_container_name}"
+                else:
+                    # Generate SAS token for target container using container-specific function
+                    target_sas_token = generate_container_sas(
+                        account_name=self.storage_account_name,
+                        container_name=target_container_name,
+                        account_key=self.storage_account_key,
+                        permission=ContainerSasPermissions(write=True, read=True, list=True),
+                        expiry=datetime.utcnow() + timedelta(hours=24)
+                    )
+                    target_container_url = f"https://{self.storage_account_name}.blob.core.windows.net/{target_container_name}?{target_sas_token}"
                 
                 translation_targets.append(
                     TranslationTarget(
@@ -168,10 +230,20 @@ class BatchDocumentTranslator:
             
             # Set up batch translation
             print("\nStarting batch translation job...")
-            translation_input = DocumentTranslationInput(
-                source_url=source_container_url,
-                targets=translation_targets
-            )
+            # Build translation input with optional source language
+            translation_kwargs = {
+                'source_url': source_container_url,
+                'targets': translation_targets
+            }
+            
+            # Add source language if specified (otherwise Azure will auto-detect)
+            if source_language:
+                translation_kwargs['source_language'] = source_language
+                print(f"Using specified source language: {source_language}")
+            else:
+                print("Using auto-detection for source language")
+            
+            translation_input = DocumentTranslationInput(**translation_kwargs)
             
             # Start translation
             poller = self.translation_client.begin_translation([translation_input])
@@ -190,6 +262,7 @@ class BatchDocumentTranslator:
             results_by_language = {lang: [] for lang in target_languages}
             success_count = 0
             failure_count = 0
+            detected_source_languages = {}  # Track detected language per document
             
             print("\n" + "="*70)
             print("BATCH TRANSLATION RESULTS")
@@ -201,13 +274,26 @@ class BatchDocumentTranslator:
                     source_file = os.path.basename(document.source_document_url.split('?')[0])
                     target_lang = document.translated_to
                     
+                    # Note: Azure Document Translation API does not expose detected source language
+                    # The API detects language internally but doesn't return it in the response
+                    detected_lang = 'auto-detected'
+                    
+                    # Debug output (can be removed later)
+                    # print(f"\n📋 Available document properties: {[attr for attr in dir(document) if not attr.startswith('_')]}")
+                    
+                    # Store detected language for this source file
+                    if source_file not in detected_source_languages:
+                        detected_source_languages[source_file] = detected_lang
+                    
                     print(f"\n✓ {source_file} → {target_lang}")
+                    print(f"  Detected source language: {detected_lang}")
                     print(f"  Translated URL: {document.translated_document_url}")
                     
                     results_by_language[target_lang].append({
                         'source': source_file,
                         'url': document.translated_document_url,
-                        'status': 'success'
+                        'status': 'success',
+                        'detected_source_language': detected_lang
                     })
                     
                 elif document.status == "Failed":
@@ -219,9 +305,15 @@ class BatchDocumentTranslator:
                     
             print("\n" + "="*70)
             print(f"SUMMARY: {success_count} succeeded, {failure_count} failed")
+            print("\nDetected Source Languages:")
+            for source_file, lang in detected_source_languages.items():
+                print(f"  {source_file}: {lang}")
             print("="*70)
             
-            return results_by_language
+            return {
+                'results': results_by_language,
+                'detected_source_languages': detected_source_languages
+            }
             
         except Exception as e:
             print(f"Error during batch translation: {e}")

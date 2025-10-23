@@ -5,36 +5,84 @@ Translates a single PDF document using Azure Translator Service with auto langua
 
 import os
 import time
+import logging
 from azure.ai.translation.document import DocumentTranslationClient, DocumentTranslationInput, TranslationTarget
 from azure.core.credentials import AzureKeyCredential
-from azure.storage.blob import BlobServiceClient, generate_blob_sas, BlobSasPermissions
+from azure.storage.blob import BlobServiceClient, generate_blob_sas, generate_container_sas, BlobSasPermissions, ContainerSasPermissions
+from azure.identity import DefaultAzureCredential, ManagedIdentityCredential
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
+
 
 class SingleDocumentTranslator:
-    def __init__(self):
-        """Initialize the translator with Azure credentials."""
+    def __init__(self, use_managed_identity=None):
+        """
+        Initialize the translator with Azure credentials.
+        
+        Args:
+            use_managed_identity: If True, use Managed Identity. If False, use keys.
+                                 If None (default), auto-detect based on available credentials.
+        """
+        logger.info("Initializing SingleDocumentTranslator")
+        
         self.translator_endpoint = os.getenv("AZURE_TRANSLATOR_ENDPOINT")
         self.translator_key = os.getenv("AZURE_TRANSLATOR_KEY")
-        self.storage_connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
         self.storage_account_name = os.getenv("AZURE_STORAGE_ACCOUNT_NAME")
+        self.storage_connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
         self.storage_account_key = os.getenv("AZURE_STORAGE_ACCOUNT_KEY")
         
         # Validate required credentials
-        if not all([self.translator_endpoint, self.translator_key, self.storage_connection_string]):
-            raise ValueError("Missing required Azure credentials. Please check your .env file.")
+        if not self.translator_endpoint or not self.storage_account_name:
+            logger.error("Missing required credentials")
+            raise ValueError("Missing required AZURE_TRANSLATOR_ENDPOINT or AZURE_STORAGE_ACCOUNT_NAME")
         
-        self.translation_client = DocumentTranslationClient(
-            self.translator_endpoint,
-            AzureKeyCredential(self.translator_key)
-        )
-        self.blob_service_client = BlobServiceClient.from_connection_string(
-            self.storage_connection_string
-        )
+        # Auto-detect authentication method
+        if use_managed_identity is None:
+            # Use Managed Identity if connection string is not provided
+            use_managed_identity = not bool(self.storage_connection_string)
+        
+        self.use_managed_identity = use_managed_identity
+        
+        # Initialize translation client
+        if use_managed_identity:
+            logger.info("Using Managed Identity for authentication")
+            print("🔐 Using Managed Identity for authentication")
+            credential = DefaultAzureCredential()
+            self.translation_client = DocumentTranslationClient(
+                self.translator_endpoint,
+                credential
+            )
+            self.blob_service_client = BlobServiceClient(
+                account_url=f"https://{self.storage_account_name}.blob.core.windows.net",
+                credential=credential
+            )
+        else:
+            logger.info("Using Key-based authentication")
+            print("🔑 Using Key-based authentication")
+            if not self.translator_key or not self.storage_connection_string:
+                logger.error("Missing keys for key-based authentication")
+                raise ValueError("Missing AZURE_TRANSLATOR_KEY or AZURE_STORAGE_CONNECTION_STRING for key-based auth")
+            
+            self.translation_client = DocumentTranslationClient(
+                self.translator_endpoint,
+                AzureKeyCredential(self.translator_key)
+            )
+            self.blob_service_client = BlobServiceClient.from_connection_string(
+                self.storage_connection_string
+            )
+        
+        logger.info("SingleDocumentTranslator initialized successfully")
     
     def upload_document_to_blob(self, file_path, container_name):
         """
@@ -47,42 +95,62 @@ class SingleDocumentTranslator:
         Returns:
             URL of the uploaded blob with SAS token
         """
+        logger.info(f"Starting upload: {file_path} to container {container_name}")
         try:
             # Create container if it doesn't exist
             container_client = self.blob_service_client.get_container_client(container_name)
             try:
-                # Set public access to blob level for Azure Translator to access
-                container_client.create_container(public_access='blob')
+                # Create container without public access (SAS tokens will provide access)
+                container_client.create_container()
+                logger.info(f"Created new container: {container_name}")
                 print(f"Created container: {container_name}")
             except Exception as e:
-                print(f"Container {container_name} already exists or creation failed: {e}")
+                # Container might already exist, which is fine
+                if "ContainerAlreadyExists" in str(e) or "already exists" in str(e).lower():
+                    logger.debug(f"Container {container_name} already exists")
+                    print(f"Container {container_name} already exists")
+                else:
+                    logger.warning(f"Container creation note: {e}")
+                    print(f"Container creation note: {e}")
             
             # Upload the file
             blob_name = os.path.basename(file_path)
             blob_client = container_client.get_blob_client(blob_name)
             
+            logger.info(f"Uploading blob: {blob_name}")
             with open(file_path, "rb") as data:
                 blob_client.upload_blob(data, overwrite=True)
+                logger.info(f"Successfully uploaded {blob_name} to {container_name}")
                 print(f"Uploaded {blob_name} to container {container_name}")
             
-            # Generate SAS token for the blob with proper permissions
-            sas_token = generate_blob_sas(
-                account_name=self.storage_account_name,
-                container_name=container_name,
-                blob_name=blob_name,
-                account_key=self.storage_account_key,
-                permission=BlobSasPermissions(read=True, list=True),
-                expiry=datetime.utcnow() + timedelta(hours=24)
-            )
-            
-            blob_url_with_sas = f"{blob_client.url}?{sas_token}"
-            return blob_url_with_sas
+            # Return URL based on authentication method
+            if self.use_managed_identity:
+                # With Managed Identity, return the blob URL directly
+                # Azure Translator will use its own managed identity to access
+                logger.debug(f"Returning blob URL (Managed Identity): {blob_client.url}")
+                return blob_client.url
+            else:
+                # Generate SAS token for key-based authentication
+                logger.debug("Generating SAS token for blob access")
+                sas_token = generate_blob_sas(
+                    account_name=self.storage_account_name,
+                    container_name=container_name,
+                    blob_name=blob_name,
+                    account_key=self.storage_account_key,
+                    permission=BlobSasPermissions(read=True, list=True),
+                    expiry=datetime.utcnow() + timedelta(hours=24)
+                )
+                
+                blob_url_with_sas = f"{blob_client.url}?{sas_token}"
+                logger.debug("Returning blob URL with SAS token")
+                return blob_url_with_sas
             
         except Exception as e:
+            logger.error(f"Error uploading document: {e}", exc_info=True)
             print(f"Error uploading document: {e}")
             raise
     
-    def translate_document(self, input_file_path, target_language, source_container="source", target_container="target"):
+    def translate_document(self, input_file_path, target_language, source_container="source", target_container="target", source_language=None):
         """
         Translate a single PDF document.
         
@@ -91,73 +159,164 @@ class SingleDocumentTranslator:
             target_language: Target language code (e.g., 'es', 'fr', 'de')
             source_container: Name of the source blob container
             target_container: Name of the target blob container
+            source_language: Optional source language code (if not provided, auto-detect)
             
         Returns:
             URL of the translated document
         """
+        logger.info(f"Starting translation: {input_file_path} -> {target_language}")
+        if source_language:
+            logger.info(f"Source language specified: {source_language}")
+        else:
+            logger.info("Source language: auto-detect")
+            
         try:
             print(f"Starting translation of {input_file_path} to {target_language}")
             
             # Upload source document
+            logger.info("Uploading source document to blob storage")
             print("Uploading source document...")
-            source_blob_url = self.upload_document_to_blob(input_file_path, source_container)
+            self.upload_document_to_blob(input_file_path, source_container)
+            
+            # Generate source container URL with SAS token
+            # Note: Azure Translator needs container-level access, not individual blob URLs
+            logger.info("Generating source container URL")
+            if self.use_managed_identity:
+                # With Managed Identity, use container URL directly
+                source_container_url = f"https://{self.storage_account_name}.blob.core.windows.net/{source_container}"
+                logger.debug(f"Source container URL (Managed Identity): {source_container_url}")
+            else:
+                # Generate SAS token for source container using container-specific function
+                logger.debug("Generating SAS token for source container")
+                source_sas_token = generate_container_sas(
+                    account_name=self.storage_account_name,
+                    container_name=source_container,
+                    account_key=self.storage_account_key,
+                    permission=ContainerSasPermissions(read=True, list=True),
+                    expiry=datetime.utcnow() + timedelta(hours=24)
+                )
+                source_container_url = f"https://{self.storage_account_name}.blob.core.windows.net/{source_container}?{source_sas_token}"
+                logger.debug("Source container SAS token generated")
             
             # Get target container URL with SAS token
+            logger.info(f"Setting up target container: {target_container}")
             target_container_client = self.blob_service_client.get_container_client(target_container)
             try:
-                # Set public access to blob level for Azure Translator to write results
-                target_container_client.create_container(public_access='blob')
+                # Create container without public access (SAS tokens will provide access)
+                target_container_client.create_container()
+                logger.info(f"Created target container: {target_container}")
                 print(f"Created target container: {target_container}")
             except Exception as e:
-                print(f"Target container {target_container} already exists or creation failed: {e}")
+                # Container might already exist, which is fine
+                if "ContainerAlreadyExists" in str(e) or "already exists" in str(e).lower():
+                    logger.debug(f"Target container {target_container} already exists")
+                    print(f"Target container {target_container} already exists")
+                    # Clear existing blobs to avoid TargetFileAlreadyExists error
+                    logger.info("Clearing existing files from target container")
+                    print("Clearing existing files from target container...")
+                    blobs = target_container_client.list_blobs()
+                    for blob in blobs:
+                        target_container_client.delete_blob(blob.name)
+                        logger.debug(f"Deleted blob: {blob.name}")
+                        print(f"  Deleted: {blob.name}")
+                else:
+                    logger.warning(f"Target container creation note: {e}")
+                    print(f"Target container creation note: {e}")
             
-            target_sas_token = generate_blob_sas(
-                account_name=self.storage_account_name,
-                container_name=target_container,
-                blob_name="",
-                account_key=self.storage_account_key,
-                permission=BlobSasPermissions(write=True, read=True, list=True),
-                expiry=datetime.utcnow() + timedelta(hours=24)
-            )
-            
-            target_container_url = f"https://{self.storage_account_name}.blob.core.windows.net/{target_container}?{target_sas_token}"
+            # Get target container URL based on authentication method
+            logger.info("Generating target container URL")
+            if self.use_managed_identity:
+                # With Managed Identity, use container URL directly
+                target_container_url = f"https://{self.storage_account_name}.blob.core.windows.net/{target_container}"
+                logger.debug(f"Target container URL (Managed Identity): {target_container_url}")
+            else:
+                # Generate SAS token for target container using container-specific function
+                logger.debug("Generating SAS token for target container")
+                target_sas_token = generate_container_sas(
+                    account_name=self.storage_account_name,
+                    container_name=target_container,
+                    account_key=self.storage_account_key,
+                    permission=ContainerSasPermissions(write=True, read=True, list=True),
+                    expiry=datetime.utcnow() + timedelta(hours=24)
+                )
+                
+                target_container_url = f"https://{self.storage_account_name}.blob.core.windows.net/{target_container}?{target_sas_token}"
+                logger.debug("Target container SAS token generated")
             
             # Set up translation
+            logger.info("Configuring translation job")
             print("Starting translation job...")
-            translation_input = DocumentTranslationInput(
-                source_url=source_blob_url,
-                targets=[
+            # Build translation input with optional source language
+            translation_kwargs = {
+                'source_url': source_container_url,  # Now using container URL, not blob URL
+                'targets': [
                     TranslationTarget(
                         target_url=target_container_url,
                         language=target_language
                     )
                 ]
-            )
+            }
+            
+            # Add source language if specified (otherwise Azure will auto-detect)
+            if source_language:
+                translation_kwargs['source_language'] = source_language
+                logger.info(f"Using specified source language: {source_language}")
+                print(f"Using specified source language: {source_language}")
+            else:
+                logger.info("Using auto-detection for source language")
+                print("Using auto-detection for source language")
+            
+            translation_input = DocumentTranslationInput(**translation_kwargs)
             
             # Start translation
+            logger.info("Submitting translation job to Azure")
             poller = self.translation_client.begin_translation([translation_input])
             
+            logger.info("Translation job submitted, waiting for completion")
             print("Translation job submitted. Waiting for completion...")
             result = poller.result()
+            logger.info("Translation job completed")
             
             # Check results
+            logger.info("Processing translation results")
             for document in result:
                 if document.status == "Succeeded":
+                    logger.info(f"Translation succeeded for document")
+                    logger.debug(f"Source URL: {document.source_document_url}")
+                    logger.debug(f"Translated URL: {document.translated_document_url}")
+                    
                     print(f"✓ Translation completed successfully!")
                     print(f"  Source document: {document.source_document_url}")
                     print(f"  Translated document: {document.translated_document_url}")
-                    print(f"  Detected source language: {document.source_language if hasattr(document, 'source_language') else 'auto-detected'}")
+                    
+                    # Note: Azure Document Translation API does not expose detected source language
+                    # The API detects language internally but doesn't return it in the response
+                    detected_lang = 'auto-detected'
+                    
+                    logger.info(f"Source language: {detected_lang}, Target language: {target_language}")
+                    print(f"\n  Detected source language: {detected_lang}")
                     print(f"  Target language: {target_language}")
-                    return document.translated_document_url
+                    
+                    # Return both URL and detected language
+                    return {
+                        'url': document.translated_document_url,
+                        'detected_source_language': detected_lang
+                    }
                 elif document.status == "Failed":
+                    error_code = document.error.code if document.error else 'Unknown'
+                    error_msg = document.error.message if document.error else 'Unknown'
+                    logger.error(f"Translation failed - Code: {error_code}, Message: {error_msg}")
+                    
                     print(f"✗ Translation failed!")
-                    print(f"  Error code: {document.error.code if document.error else 'Unknown'}")
-                    print(f"  Error message: {document.error.message if document.error else 'Unknown'}")
+                    print(f"  Error code: {error_code}")
+                    print(f"  Error message: {error_msg}")
                     return None
                 else:
+                    logger.warning(f"Unexpected document status: {document.status}")
                     print(f"  Status: {document.status}")
             
         except Exception as e:
+            logger.error(f"Error during translation: {e}", exc_info=True)
             print(f"Error during translation: {e}")
             raise
     
@@ -207,15 +366,24 @@ def main():
         return
     
     # Translate the document
-    translated_url = translator.translate_document(
+    translation_result = translator.translate_document(
         input_file_path=input_pdf,
         target_language=target_language
     )
     
-    if translated_url:
+    if translation_result:
+        # Handle dictionary return format
+        if isinstance(translation_result, dict):
+            translated_url = translation_result['url']
+            detected_lang = translation_result.get('detected_source_language', 'unknown')
+        else:
+            translated_url = translation_result
+            detected_lang = 'unknown'
+        
         # Download the translated document
         translator.download_translated_document(translated_url, output_pdf)
         print(f"\n✓ Translation complete! Output saved to: {output_pdf}")
+        print(f"  Detected source language: {detected_lang}")
     else:
         print("\n✗ Translation failed.")
 

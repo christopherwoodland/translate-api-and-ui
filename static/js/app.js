@@ -29,9 +29,21 @@ async function loadLanguages() {
         const response = await fetch('/api/languages');
         languages = await response.json();
         renderLanguages();
+        populateSourceLanguageDropdown();
     } catch (error) {
         console.error('Error loading languages:', error);
     }
+}
+
+// Populate source language dropdown
+function populateSourceLanguageDropdown() {
+    const dropdown = document.getElementById('source-language');
+    languages.forEach(lang => {
+        const option = document.createElement('option');
+        option.value = lang.code;
+        option.textContent = `${lang.name} (${lang.code})`;
+        dropdown.appendChild(option);
+    });
 }
 
 // Render language options
@@ -281,13 +293,15 @@ async function startTranslation() {
         
         // Start translation job
         updateProgress(10, 'Starting translation job...');
+        const sourceLanguage = document.getElementById('source-language').value;
         const translationResponse = await fetch('/api/translate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 job_type: selectedType,
                 files: uploadData.files,
-                target_languages: selectedLanguages
+                target_languages: selectedLanguages,
+                source_language: sourceLanguage || null
             })
         });
         
@@ -320,8 +334,8 @@ async function pollJobStatus() {
         } else if (job.status === 'failed') {
             showError(job.error || 'Translation failed');
         } else {
-            // Continue polling
-            setTimeout(pollJobStatus, 2000);
+            // Continue polling every 10 seconds
+            setTimeout(pollJobStatus, 10000);
         }
         
     } catch (error) {
@@ -346,10 +360,49 @@ function showResults(job) {
     
     const content = document.getElementById('results-content');
     
+    // Debug: Log the job result to console
+    console.log('Job Result:', job.result);
+    console.log('Detected Source Language:', job.result.detected_source_language);
+    
+    // Helper function to get language name from code
+    const getLanguageName = (code) => {
+        const lang = languages.find(l => l.code === code);
+        return lang ? lang.name : code;
+    };
+    
+    // Build language detection info - always show it
+    let languageInfo = '';
+    const detectedLang = job.result.detected_source_language;
+    const detectedLangs = job.result.detected_source_languages;
+    
+    // For single and OCR: show single detected language
+    if (!detectedLangs) {
+        if (!detectedLang || detectedLang === 'unknown') {
+            // Show warning when language not detected
+            languageInfo = `<div class="language-info language-info-warning">
+                <strong>Source Language:</strong> Not available from API
+            </div>`;
+        } else if (detectedLang === 'auto-detected') {
+            // Azure detected but doesn't expose the language code
+            languageInfo = `<div class="language-info">
+                <strong>Source Language:</strong> Auto-detected by Azure (language code not exposed by API)
+            </div>`;
+        } else {
+            // Show detected language
+            const sourceLangName = getLanguageName(detectedLang);
+            languageInfo = `<div class="language-info">
+                <strong>Source Language Detected:</strong> ${sourceLangName} (${detectedLang})
+            </div>`;
+        }
+    }
+    
     if (job.job_type === 'single') {
+        const targetLangName = job.result.target_language ? getLanguageName(job.result.target_language) : '';
         content.innerHTML = `
             <div class="result-item">
                 <h3>Translation Complete</h3>
+                ${languageInfo}
+                ${job.result.target_language ? `<div class="language-info"><strong>Target Language:</strong> ${targetLangName} (${job.result.target_language})</div>` : ''}
                 <p>Your translated document is ready for download.</p>
                 <a href="${job.result.download_url}" class="download-link" download>
                     📥 Download Translated PDF
@@ -359,10 +412,35 @@ function showResults(job) {
     } else if (job.job_type === 'batch') {
         let html = '<div class="result-item">';
         html += '<h3>Batch Translation Complete</h3>';
+        
+        // Display detected source languages for each document
+        if (detectedLangs && Object.keys(detectedLangs).length > 0) {
+            html += '<div class="language-info">';
+            html += '<strong>Source Languages:</strong><br>';
+            Object.entries(detectedLangs).forEach(([filename, langCode]) => {
+                if (langCode === 'auto-detected') {
+                    html += `<span style="display: block; margin-left: 20px; margin-top: 5px;">• ${filename}: Auto-detected by Azure</span>`;
+                } else if (langCode === 'unknown') {
+                    html += `<span style="display: block; margin-left: 20px; margin-top: 5px;">• ${filename}: Not available</span>`;
+                } else {
+                    const langName = getLanguageName(langCode);
+                    html += `<span style="display: block; margin-left: 20px; margin-top: 5px;">• ${filename}: ${langName} (${langCode})</span>`;
+                }
+            });
+            html += '</div>';
+        } else {
+            html += languageInfo;
+        }
+        
+        if (job.result.target_languages && job.result.target_languages.length > 0) {
+            const targetNames = job.result.target_languages.map(code => getLanguageName(code)).join(', ');
+            html += `<div class="language-info"><strong>Target Languages:</strong> ${targetNames}</div>`;
+        }
         html += '<p>Your translated documents are ready for download.</p>';
         
         Object.entries(job.result.download_urls).forEach(([lang, urls]) => {
-            html += `<h4>${lang.toUpperCase()}</h4>`;
+            const langName = getLanguageName(lang);
+            html += `<h4>${langName} (${lang.toUpperCase()})</h4>`;
             urls.forEach(url => {
                 const filename = url.split('/').pop();
                 html += `<a href="${url}" class="download-link" download>📥 ${filename}</a>`;
@@ -372,9 +450,12 @@ function showResults(job) {
         html += '</div>';
         content.innerHTML = html;
     } else if (job.job_type === 'ocr') {
+        const targetLangName = job.result.target_language ? getLanguageName(job.result.target_language) : '';
         content.innerHTML = `
             <div class="result-item">
                 <h3>OCR + Translation Complete</h3>
+                ${languageInfo}
+                ${job.result.target_language ? `<div class="language-info"><strong>Target Language:</strong> ${targetLangName} (${job.result.target_language})</div>` : ''}
                 <p>Your documents are ready for download.</p>
                 <a href="${job.result.download_urls.ocr_text}" class="download-link" download>
                     📄 Download OCR Text

@@ -71,15 +71,29 @@
 
             <!-- Language Selection Section -->
             <section class="card" id="language-section" style="display: none;">
-                <h2>3. Select Target Language(s)</h2>
-                <div id="language-limit-notice" class="notice" style="display: none;">
-                    <strong>Note:</strong> <span id="language-limit-text"></span>
+                <h2>3. Select Languages</h2>
+                
+                <!-- Source Language -->
+                <div class="source-language-section">
+                    <h3>Source Language (Optional)</h3>
+                    <p class="language-hint">Leave as "Auto-detect" to let Azure identify the source language automatically</p>
+                    <select id="source-language" class="language-dropdown">
+                        <option value="">Auto-detect</option>
+                    </select>
                 </div>
-                <div class="language-grid" id="language-grid">
-                    <!-- Languages will be loaded dynamically -->
-                </div>
-                <div class="language-search">
-                    <input type="text" id="language-search" placeholder="Search languages..." />
+                
+                <!-- Target Language(s) -->
+                <div class="target-language-section">
+                    <h3>Target Language(s)</h3>
+                    <div id="language-limit-notice" class="notice" style="display: none;">
+                        <strong>Note:</strong> <span id="language-limit-text"></span>
+                    </div>
+                    <div class="language-search">
+                        <input type="text" id="language-search" placeholder="Search target languages..." />
+                    </div>
+                    <div class="language-grid" id="language-grid">
+                        <!-- Languages will be loaded dynamically -->
+                    </div>
                 </div>
             </section>
 
