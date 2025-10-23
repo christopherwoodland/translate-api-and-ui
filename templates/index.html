@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Azure Document Translation</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🌐 Azure Document Translation</h1>
+            <p>Upload PDFs and translate them using Azure AI services</p>
+        </header>
+
+        <main>
+            <!-- Translation Type Selection -->
+            <section class="card">
+                <h2>1. Select Translation Type</h2>
+                <div class="translation-types">
+                    <div class="type-option" data-type="single">
+                        <div class="type-icon">📄</div>
+                        <h3>Single Translation</h3>
+                        <p>Translate one PDF to one language</p>
+                        <ul>
+                            <li>Fast and simple</li>
+                            <li>Auto language detection</li>
+                            <li>One file, one language</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="type-option" data-type="batch">
+                        <div class="type-icon">📚</div>
+                        <h3>Batch Translation</h3>
+                        <p>Translate multiple PDFs to multiple languages</p>
+                        <ul>
+                            <li>Process many files at once</li>
+                            <li>Multiple target languages</li>
+                            <li>Efficient bulk processing</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="type-option" data-type="ocr">
+                        <div class="type-icon">🔍</div>
+                        <h3>OCR + Translation</h3>
+                        <p>Convert scanned PDF to searchable, then translate</p>
+                        <ul>
+                            <li>For scanned documents</li>
+                            <li>OCR with Document Intelligence</li>
+                            <li>Creates searchable PDF first</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <!-- File Upload Section -->
+            <section class="card" id="upload-section" style="display: none;">
+                <h2>2. Upload PDF Files</h2>
+                <div class="upload-area" id="upload-area">
+                    <div class="upload-icon">📎</div>
+                    <p>Drag and drop PDF files here</p>
+                    <p class="upload-hint">or</p>
+                    <button type="button" class="btn btn-secondary" onclick="document.getElementById('file-input').click()">
+                        Browse Files
+                    </button>
+                    <input type="file" id="file-input" accept=".pdf" multiple style="display: none;">
+                    <p class="file-limit" id="file-limit-text">Maximum 100MB per file</p>
+                </div>
+                <div id="file-list" class="file-list"></div>
+            </section>
+
+            <!-- Language Selection Section -->
+            <section class="card" id="language-section" style="display: none;">
+                <h2>3. Select Target Language(s)</h2>
+                <div id="language-limit-notice" class="notice" style="display: none;">
+                    <strong>Note:</strong> <span id="language-limit-text"></span>
+                </div>
+                <div class="language-grid" id="language-grid">
+                    <!-- Languages will be loaded dynamically -->
+                </div>
+                <div class="language-search">
+                    <input type="text" id="language-search" placeholder="Search languages..." />
+                </div>
+            </section>
+
+            <!-- Start Translation Section -->
+            <section class="card" id="action-section" style="display: none;">
+                <h2>4. Start Translation</h2>
+                <div class="action-area">
+                    <button type="button" class="btn btn-primary" id="start-btn" disabled>
+                        <span class="btn-text">Start Translation</span>
+                    </button>
+                    <button type="button" class="btn btn-secondary" id="reset-btn">
+                        Reset
+                    </button>
+                </div>
+            </section>
+
+            <!-- Progress Section -->
+            <section class="card" id="progress-section" style="display: none;">
+                <h2>Translation Progress</h2>
+                <div class="progress-container">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-fill"></div>
+                    </div>
+                    <p class="progress-text" id="progress-text">Initializing...</p>
+                    <div class="progress-details" id="progress-details"></div>
+                </div>
+            </section>
+
+            <!-- Results Section -->
+            <section class="card" id="results-section" style="display: none;">
+                <h2>✅ Translation Complete!</h2>
+                <div id="results-content" class="results-content"></div>
+            </section>
+
+            <!-- Error Section -->
+            <section class="card error-card" id="error-section" style="display: none;">
+                <h2>❌ Error</h2>
+                <div id="error-content" class="error-content"></div>
+            </section>
+        </main>
+
+        <footer>
+            <p>Powered by Azure Translator Service & Azure Document Intelligence</p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
