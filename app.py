@@ -36,7 +36,25 @@ app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB max file size
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['OUTPUT_FOLDER'] = 'outputs'
-app.config['ALLOWED_EXTENSIONS'] = {'pdf'}
+app.config['ALLOWED_EXTENSIONS'] = {
+    # PDF
+    'pdf',
+    # Microsoft Office
+    'doc', 'docx',
+    'xls', 'xlsx',
+    'ppt', 'pptx',
+    # OpenDocument
+    'odt', 'ods', 'odp',
+    # Text and Markup
+    'rtf', 'txt',
+    'html', 'htm', 'mhtml', 'mht',
+    'md', 'markdown', 'mkdn', 'mdown', 'mdwn',
+    # Email and Localization
+    'msg',
+    'xlf', 'xliff',
+    # Data Files
+    'csv', 'tsv', 'tab'
+}
 
 # Authentication configuration
 # Set USE_MANAGED_IDENTITY=true in .env to use Azure Managed Identity (for Azure-hosted environments)
@@ -167,7 +185,9 @@ def run_single_translation(job_id, file_path, target_language, source_language=N
                 translated_url = translation_result
                 detected_lang = 'unknown'
             
-            logger.debug(f"Job {job_id}: Detected language: {detected_lang}")
+            # Log detected language prominently
+            logger.info(f"Job {job_id}: ✓ Source language detected: {detected_lang}")
+            logger.info(f"Job {job_id}: → Target language: {target_language}")
             translator.download_translated_document(translated_url, output_path)
             
             logger.info(f"Job {job_id}: Completed successfully - Output: {output_filename}")
@@ -235,6 +255,14 @@ def run_batch_translation(job_id, file_paths, target_languages, source_language=
             results = batch_results
             detected_langs = {}
         
+        # Log detected languages for each document
+        if detected_langs:
+            logger.info(f"Job {job_id}: ✓ Detected source languages:")
+            for filename, lang_code in detected_langs.items():
+                logger.info(f"Job {job_id}:   • {filename}: {lang_code}")
+        else:
+            logger.warning(f"Job {job_id}: No detected language information available")
+        
         # Download results
         job.update(progress=80, message="Downloading translated documents...")
         output_folder = os.path.join(app.config['OUTPUT_FOLDER'], f"batch_{job_id}")
@@ -295,6 +323,10 @@ def run_ocr_translation(job_id, file_path, target_language, source_language=None
             }
             
             detected_lang = results.get('detected_source_language', 'unknown')
+            
+            # Log detected language prominently
+            logger.info(f"Job {job_id}: ✓ Source language detected: {detected_lang}")
+            logger.info(f"Job {job_id}: → Target language: {target_language}")
             
             job.update(
                 status="completed",

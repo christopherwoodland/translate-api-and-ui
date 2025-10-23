@@ -1,15 +1,17 @@
 # Azure Document Translation
 
-A complete solution for translating PDF documents using Azure Translator Service and Azure Document Intelligence, with both a **Web UI** and **Command-Line Scripts**.
+A complete solution for translating **25+ document formats** using Azure Translator Service and Azure Document Intelligence, with both a **Web UI** and **Command-Line Scripts**.
 
 ## 🎯 Features
 
-- **🌐 Web UI**: User-friendly interface for uploading PDFs and running translations
-- **Single Document Translation**: Translate one PDF at a time with auto language detection
-- **Batch Translation**: Process multiple PDFs simultaneously to multiple target languages
-- **OCR + Translation Pipeline**: Convert scanned/image PDFs to searchable format before translation
+- **🌐 Web UI**: User-friendly interface for uploading documents and running translations
+- **25+ File Format Support**: PDF, Microsoft Office (Word/Excel/PowerPoint), OpenDocument, text files, HTML, Markdown, email messages, localization files, and CSV/TSV data
+- **Single Document Translation**: Translate one document at a time with auto language detection
+- **Batch Translation**: Process multiple documents simultaneously to multiple target languages
+- **OCR + Translation Pipeline**: Convert scanned/image documents to searchable format before translation
 - **Real-time Progress Tracking**: Monitor translation jobs with live status updates
 - **Multiple Language Support**: Translate to 20+ popular languages (100+ total supported)
+- **Visual File Type Icons**: Dynamic icons for each supported format (📘 Word, 📗 Excel, 📙 PowerPoint, 🌐 HTML, etc.)
 
 ## Prerequisites
 
@@ -116,7 +118,7 @@ For automation or advanced usage, use the Python scripts directly.
 
 ### Script 1: Single Document Translation
 
-Translates one PDF document at a time with automatic language detection.
+Translates one document at a time with automatic language detection.
 
 ```powershell
 python single_document_translation.py
@@ -124,9 +126,19 @@ python single_document_translation.py
 
 **Configuration** (edit the script's `main()` function):
 ```python
-input_pdf = "sample.pdf"  # Your PDF file path
-target_language = "es"     # Target language code
+input_file = "sample.docx"  # Your document file path (any supported format)
+target_language = "es"       # Target language code
 ```
+
+**Supported File Formats**:
+- **PDF**: .pdf
+- **Microsoft Office**: .doc, .docx, .xls, .xlsx, .ppt, .pptx
+- **OpenDocument**: .odt, .ods, .odp
+- **Text**: .txt, .rtf
+- **Markup**: .html, .htm, .mhtml, .mht, .md, .markdown, .mkdn, .mdown, .mdwn
+- **Email**: .msg
+- **Localization**: .xlf, .xliff
+- **Data**: .csv, .tsv, .tab
 
 **Supported Language Codes**:
 - `en` - English
@@ -139,11 +151,11 @@ target_language = "es"     # Target language code
 - `zh-Hans` - Chinese (Simplified)
 - [See full list](https://learn.microsoft.com/azure/cognitive-services/translator/language-support)
 
-**Output**: Creates `translated_{lang}_{filename}.pdf` in the current directory
+**Output**: Creates `translated_{lang}_{filename}` with original extension in the current directory
 
 ### Script 2: Batch Translation
 
-Translates multiple PDFs to multiple languages simultaneously.
+Translates multiple documents to multiple languages simultaneously. Supports all 25+ file formats.
 
 ```powershell
 python batch_translation.py
@@ -151,35 +163,38 @@ python batch_translation.py
 
 **Configuration** (edit the script's `main()` function):
 ```python
-input_folder = "input_pdfs"                  # Folder with PDF files
+input_folder = "input_documents"             # Folder with document files (any supported format)
 target_languages = ["es", "fr", "de"]        # List of target languages
 output_base_folder = "translated_output"     # Output folder
 ```
 
 **Setup**:
-1. Create an `input_pdfs` folder
-2. Place your PDF files in it
+1. Create an `input_documents` folder
+2. Place your document files in it (Word, Excel, PDF, text files, etc.)
 3. Run the script
 
-**Output**: Creates `translated_output/{language}/` folders with translated PDFs
+**Output**: Creates `translated_output/{language}/` folders with translated documents
 
 **Example**:
-```
+```text
 translated_output/
 ├── es/
-│   ├── document1.pdf
-│   └── document2.pdf
+│   ├── document1.docx
+│   ├── spreadsheet.xlsx
+│   └── report.pdf
 ├── fr/
-│   ├── document1.pdf
-│   └── document2.pdf
+│   ├── document1.docx
+│   ├── spreadsheet.xlsx
+│   └── report.pdf
 └── de/
-    ├── document1.pdf
-    └── document2.pdf
+    ├── document1.docx
+    ├── spreadsheet.xlsx
+    └── report.pdf
 ```
 
 ### Script 3: OCR + Translation Pipeline
 
-Converts scanned/image PDFs to searchable format using OCR, then translates.
+Converts scanned/image documents to searchable format using OCR, then translates. Supports image formats and documents with embedded images.
 
 ```powershell
 python ocr_translation_pipeline.py
@@ -187,27 +202,28 @@ python ocr_translation_pipeline.py
 
 **Configuration** (edit the script's `main()` function):
 ```python
-input_pdf = "sample.pdf"                      # Your PDF file
+input_file = "scanned_doc.pdf"                # Your document or image file
 target_language = "es"                        # Target language
 output_folder = "ocr_translated_output"       # Output folder
 ```
 
 **Pipeline Steps**:
-1. ✓ Analyze PDF with Azure Document Intelligence OCR
-2. ✓ Extract text and create searchable PDF
-3. ✓ Translate the searchable PDF
+1. ✓ Analyze document with Azure Document Intelligence OCR
+2. ✓ Extract text and create searchable document
+3. ✓ Translate the searchable document
 4. ✓ Download the translated result
 
 **Output**:
 - `{filename}_ocr_text.txt` - Extracted text from OCR
-- `{filename}_searchable.pdf` - Searchable PDF with OCR data
-- `{filename}_translated_{lang}.pdf` - Final translated PDF
+- `{filename}_searchable.{ext}` - Searchable document with OCR data
+- `{filename}_translated_{lang}.{ext}` - Final translated document
 
 **Use Cases**:
 - Scanned documents
-- Image-based PDFs
+- Image-based files
 - Documents with poor text recognition
 - Historical documents
+- Mixed text/image content
 
 ## Troubleshooting
 
@@ -238,14 +254,17 @@ Error: Failed to upload to blob storage
 - Check firewall settings allow your IP
 
 #### 4. Translation Fails
-```
+
+```text
 Error: Translation failed
 ```
+
 **Possible causes**:
 - Invalid language code
 - File too large (max 40MB per file)
-- Unsupported file format
+- Unsupported file format (check the supported list above)
 - Insufficient quota/credits
+- Document contains protected content or DRM
 
 ### Getting Azure Credentials
 
@@ -342,7 +361,7 @@ All scripts include comprehensive error handling. Check console output for detai
 
 ## 📁 File Structure
 
-```
+```text
 translate-api-and-ui/
 ├── app.py                            # 🌐 Flask web application
 ├── templates/
@@ -351,15 +370,16 @@ translate-api-and-ui/
 │   ├── css/
 │   │   └── style.css                 # UI styling
 │   └── js/
-│       └── app.js                    # UI interactivity
+│       └── app.js                    # UI interactivity (file type icons & validation)
 ├── .env                              # Your credentials (DO NOT COMMIT)
 ├── .env.template                     # Template for credentials
 ├── requirements.txt                  # Python dependencies
-├── single_document_translation.py    # Script 1: Single translation
-├── batch_translation.py              # Script 2: Batch translation
+├── single_document_translation.py    # Script 1: Single translation (25+ formats)
+├── batch_translation.py              # Script 2: Batch translation (25+ formats)
 ├── ocr_translation_pipeline.py       # Script 3: OCR + Translation
+├── translation_app.log               # Application log file (auto-generated)
 ├── README.md                         # This file
-├── input_pdfs/                       # Input folder for batch processing
+├── input_documents/                  # Input folder for batch processing (any format)
 └── output folders/                   # Created automatically
 ```
 
@@ -374,15 +394,35 @@ translate-api-and-ui/
 
 These scripts are provided as-is for use with Azure services.
 
+## 🎨 File Type Support Details
+
+The application uses visual icons to represent different file types:
+
+- 📕 **PDF**: Standard PDF documents
+- 📘 **Word**: .doc, .docx files
+- 📗 **Excel**: .xls, .xlsx spreadsheets
+- 📙 **PowerPoint**: .ppt, .pptx presentations
+- 📓 **OpenDocument**: .odt, .ods, .odp files
+- 📄 **Text**: .txt, .rtf files
+- 🌐 **HTML**: .html, .htm, .mhtml, .mht files
+- 📋 **Markdown**: .md, .markdown, .mkdn, .mdown, .mdwn files
+- 📧 **Email**: .msg files
+- 🌍 **Localization**: .xlf, .xliff files
+- 📊 **Data**: .csv, .tsv, .tab files
+
+All formats are natively supported by Azure Translator's Document Translation API with no conversion needed.
+
 ## Contributing
 
 Feel free to enhance these scripts with additional features:
+
 - Progress bars
 - Email notifications
 - Webhook integration
 - Custom file naming
 - Metadata preservation
 - Format conversion
+- Additional file format support
 
 ---
 

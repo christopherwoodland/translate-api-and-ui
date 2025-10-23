@@ -1,7 +1,8 @@
 """
 OCR + Translation Script
-Uses Azure Document Intelligence to convert PDF to searchable PDF with OCR,
-then translates the searchable PDF using Azure Translator Service.
+Uses Azure Document Intelligence to convert documents to searchable format with OCR,
+then translates using Azure Translator Service.
+Supports: PDF, Office (Word/Excel/PowerPoint), OpenDocument, Images, and more.
 """
 
 import os
@@ -325,7 +326,8 @@ class OCRTranslationPipeline:
                     print(f"✓ Translation completed successfully!")
                     # Note: Azure Document Translation API does not expose detected source language
                     detected_lang = 'auto-detected'
-                    print(f"  Source language: {detected_lang}")
+                    print(f"  📝 Detected source language: {detected_lang}")
+                    logger.info(f"✓ OCR Translation successful - Source: {detected_lang} → Target: {target_language}")
                     return {
                         'url': document.translated_document_url,
                         'detected_source_language': detected_lang
@@ -434,6 +436,11 @@ class OCRTranslationPipeline:
                 print(f"✓ OCR text: {searchable_pdf_path.replace('.pdf', '_ocr_text.txt')}")
                 print(f"✓ Searchable PDF: {searchable_pdf_path}")
                 print(f"✓ Translated PDF: {translated_pdf_path}")
+                print(f"📝 Detected source language: {detected_lang}")
+                print(f"🎯 Target language: {target_language}")
+                
+                # Log completion with detected language
+                logger.info(f"OCR Pipeline completed - Source: {detected_lang} → Target: {target_language}")
                 
                 return {
                     'ocr_text': searchable_pdf_path.replace('.pdf', '_ocr_text.txt'),

@@ -10,7 +10,7 @@
     <div class="container">
         <header>
             <h1>🌐 Azure Document Translation</h1>
-            <p>Upload PDFs and translate them using Azure AI services</p>
+            <p>Upload documents and translate them using Azure AI services</p>
         </header>
 
         <main>
@@ -21,7 +21,7 @@
                     <div class="type-option" data-type="single">
                         <div class="type-icon">📄</div>
                         <h3>Single Translation</h3>
-                        <p>Translate one PDF to one language</p>
+                        <p>Translate one document to one language</p>
                         <ul>
                             <li>Fast and simple</li>
                             <li>Auto language detection</li>
@@ -32,7 +32,7 @@
                     <div class="type-option" data-type="batch">
                         <div class="type-icon">📚</div>
                         <h3>Batch Translation</h3>
-                        <p>Translate multiple PDFs to multiple languages</p>
+                        <p>Translate multiple documents to multiple languages</p>
                         <ul>
                             <li>Process many files at once</li>
                             <li>Multiple target languages</li>
@@ -43,7 +43,7 @@
                     <div class="type-option" data-type="ocr">
                         <div class="type-icon">🔍</div>
                         <h3>OCR + Translation</h3>
-                        <p>Convert scanned PDF to searchable, then translate</p>
+                        <p>Convert scanned documents to searchable, then translate</p>
                         <ul>
                             <li>For scanned documents</li>
                             <li>OCR with Document Intelligence</li>
@@ -55,16 +55,17 @@
 
             <!-- File Upload Section -->
             <section class="card" id="upload-section" style="display: none;">
-                <h2>2. Upload PDF Files</h2>
+                <h2>2. Upload Documents</h2>
                 <div class="upload-area" id="upload-area">
                     <div class="upload-icon">📎</div>
-                    <p>Drag and drop PDF files here</p>
+                    <p>Drag and drop documents here</p>
                     <p class="upload-hint">or</p>
                     <button type="button" class="btn btn-secondary" onclick="document.getElementById('file-input').click()">
                         Browse Files
                     </button>
-                    <input type="file" id="file-input" accept=".pdf" multiple style="display: none;">
+                    <input type="file" id="file-input" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp,.rtf,.txt,.html,.htm,.mhtml,.mht,.md,.markdown,.msg,.xlf,.xliff,.csv,.tsv,.tab" multiple style="display: none;">
                     <p class="file-limit" id="file-limit-text">Maximum 100MB per file</p>
+                    <p class="file-types-hint">Supported: PDF, Office (Word/Excel/PowerPoint), OpenDocument, Text, HTML, Markdown, CSV, and more</p>
                 </div>
                 <div id="file-list" class="file-list"></div>
             </section>

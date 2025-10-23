@@ -158,6 +158,13 @@ header p {
     margin-top: 15px;
 }
 
+.file-types-hint {
+    font-size: 0.85em;
+    color: var(--text-secondary);
+    margin-top: 10px;
+    font-style: italic;
+}
+
 /* File List */
 .file-list {
     margin-top: 20px;

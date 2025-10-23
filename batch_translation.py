@@ -1,6 +1,7 @@
 """
 Batch Document Translation Script
-Translates multiple PDF documents using Azure Translator Service batch processing.
+Translates multiple documents using Azure Translator Service batch processing.
+Supports: PDF, Office (Word/Excel/PowerPoint), OpenDocument, Text, HTML, Markdown, and more.
 """
 
 import os
@@ -83,7 +84,7 @@ class BatchDocumentTranslator:
         Upload multiple documents to Azure Blob Storage.
         
         Args:
-            file_paths: List of paths to PDF files
+            file_paths: List of paths to document files
             container_name: Name of the blob container
             
         Returns:
@@ -129,42 +130,50 @@ class BatchDocumentTranslator:
     
     def translate_batch(self, input_folder, target_languages, source_container="batch-source", target_container_prefix="batch-target", source_language=None):
         """
-        Translate multiple PDF documents in batch.
+        Translate multiple documents in batch.
         
         Args:
-            input_folder: Folder containing PDF files to translate
+            input_folder: Folder containing document files to translate
             target_languages: List of target language codes (e.g., ['es', 'fr', 'de'])
             source_container: Name of the source blob container
             target_container_prefix: Prefix for target blob container names
             source_language: Optional source language code (if not provided, auto-detect)
             
         Returns:
-            Dictionary of translation results by language
+            Dictionary with translation results by language and detected source languages
         """
         try:
             print(f"Starting batch translation from folder: {input_folder}")
             print(f"Target languages: {', '.join(target_languages)}")
             
-            # Find all PDF files in the input folder
-            pdf_files = []
+            # Find all supported document files in the input folder
+            supported_extensions = [
+                '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+                '.odt', '.ods', '.odp', '.rtf', '.txt', '.html', '.htm',
+                '.mhtml', '.mht', '.md', '.markdown', '.mkdn', '.mdown', '.mdwn',
+                '.msg', '.xlf', '.xliff', '.csv', '.tsv', '.tab'
+            ]
+            
+            document_files = []
             input_path = Path(input_folder)
             
-            if input_path.is_file() and input_path.suffix.lower() == '.pdf':
-                pdf_files = [str(input_path)]
+            if input_path.is_file() and input_path.suffix.lower() in supported_extensions:
+                document_files = [str(input_path)]
             elif input_path.is_dir():
-                pdf_files = [str(f) for f in input_path.glob("*.pdf")]
+                for ext in supported_extensions:
+                    document_files.extend([str(f) for f in input_path.glob(f"*{ext}")])
             else:
                 raise ValueError(f"Invalid input: {input_folder} is not a file or directory")
             
-            if not pdf_files:
-                print(f"No PDF files found in {input_folder}")
+            if not document_files:
+                print(f"No supported document files found in {input_folder}")
                 return {}
             
-            print(f"Found {len(pdf_files)} PDF files to translate")
+            print(f"Found {len(document_files)} document file(s) to translate")
             
             # Upload all source documents
             print("\nUploading source documents...")
-            self.upload_documents_to_blob(pdf_files, source_container)
+            self.upload_documents_to_blob(document_files, source_container)
             
             # Generate source container URL (with or without SAS token)
             if self.use_managed_identity:
@@ -286,8 +295,11 @@ class BatchDocumentTranslator:
                         detected_source_languages[source_file] = detected_lang
                     
                     print(f"\n✓ {source_file} → {target_lang}")
-                    print(f"  Detected source language: {detected_lang}")
+                    print(f"  📝 Detected source language: {detected_lang}")
                     print(f"  Translated URL: {document.translated_document_url}")
+                    
+                    # Log detected language
+                    logger.info(f"Translation complete: {source_file} | Source: {detected_lang} → Target: {target_lang}")
                     
                     results_by_language[target_lang].append({
                         'source': source_file,
@@ -305,10 +317,14 @@ class BatchDocumentTranslator:
                     
             print("\n" + "="*70)
             print(f"SUMMARY: {success_count} succeeded, {failure_count} failed")
-            print("\nDetected Source Languages:")
+            print("\n📝 Detected Source Languages:")
             for source_file, lang in detected_source_languages.items():
-                print(f"  {source_file}: {lang}")
+                print(f"  • {source_file}: {lang}")
             print("="*70)
+            
+            # Log summary
+            logger.info(f"Batch translation summary: {success_count} succeeded, {failure_count} failed")
+            logger.info(f"Detected source languages: {detected_source_languages}")
             
             return {
                 'results': results_by_language,
@@ -356,14 +372,14 @@ def main():
     translator = BatchDocumentTranslator()
     
     # Configuration
-    input_folder = "input_pdfs"  # Folder containing your PDF files
+    input_folder = "input_documents"  # Folder containing your document files
     target_languages = ["es", "fr", "de"]  # Spanish, French, German - modify as needed
     output_base_folder = "translated_output"
     
     # Check if input folder exists
     if not os.path.exists(input_folder):
         print(f"Error: Input folder '{input_folder}' not found!")
-        print("Please create the folder and add your PDF files, or update the 'input_folder' variable.")
+        print("Please create the folder and add your document files, or update the 'input_folder' variable.")
         return
     
     # Translate all documents

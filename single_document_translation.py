@@ -1,6 +1,7 @@
 """
 Single Document Translation Script
-Translates a single PDF document using Azure Translator Service with auto language detection.
+Translates a single document using Azure Translator Service with auto language detection.
+Supports: PDF, Office (Word/Excel/PowerPoint), OpenDocument, Text, HTML, Markdown, and more.
 """
 
 import os
@@ -89,7 +90,7 @@ class SingleDocumentTranslator:
         Upload a document to Azure Blob Storage.
         
         Args:
-            file_path: Path to the local PDF file
+            file_path: Path to the local document file
             container_name: Name of the blob container
             
         Returns:
@@ -152,17 +153,17 @@ class SingleDocumentTranslator:
     
     def translate_document(self, input_file_path, target_language, source_container="source", target_container="target", source_language=None):
         """
-        Translate a single PDF document.
+        Translate a single document.
         
         Args:
-            input_file_path: Path to the input PDF file
+            input_file_path: Path to the input document file
             target_language: Target language code (e.g., 'es', 'fr', 'de')
             source_container: Name of the source blob container
             target_container: Name of the target blob container
             source_language: Optional source language code (if not provided, auto-detect)
             
         Returns:
-            URL of the translated document
+            Dictionary with URL of the translated document and detected source language
         """
         logger.info(f"Starting translation: {input_file_path} -> {target_language}")
         if source_language:
@@ -293,9 +294,9 @@ class SingleDocumentTranslator:
                     # The API detects language internally but doesn't return it in the response
                     detected_lang = 'auto-detected'
                     
-                    logger.info(f"Source language: {detected_lang}, Target language: {target_language}")
-                    print(f"\n  Detected source language: {detected_lang}")
-                    print(f"  Target language: {target_language}")
+                    logger.info(f"✓ Translation successful - Source: {detected_lang} → Target: {target_language}")
+                    print(f"\n  📝 Detected source language: {detected_lang}")
+                    print(f"  🎯 Target language: {target_language}")
                     
                     # Return both URL and detected language
                     return {
@@ -383,7 +384,8 @@ def main():
         # Download the translated document
         translator.download_translated_document(translated_url, output_pdf)
         print(f"\n✓ Translation complete! Output saved to: {output_pdf}")
-        print(f"  Detected source language: {detected_lang}")
+        print(f"  📝 Detected source language: {detected_lang}")
+        print(f"  🎯 Target language: {target_language}")
     else:
         print("\n✗ Translation failed.")
 

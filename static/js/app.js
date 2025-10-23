@@ -125,12 +125,12 @@ function selectType(type) {
     
     if (type === 'single' || type === 'ocr') {
         fileInput.removeAttribute('multiple');
-        fileLimitText.textContent = 'Select one PDF file (max 100MB)';
+        fileLimitText.textContent = 'Select one document file (max 100MB)';
         languageLimitNotice.style.display = 'block';
         languageLimitText.textContent = 'Select exactly one target language';
     } else {
         fileInput.setAttribute('multiple', 'multiple');
-        fileLimitText.textContent = 'Select multiple PDF files (max 100MB each)';
+        fileLimitText.textContent = 'Select multiple document files (max 100MB each)';
         languageLimitNotice.style.display = 'block';
         languageLimitText.textContent = 'Select one or more target languages';
     }
@@ -145,10 +145,21 @@ function selectType(type) {
 
 // Handle file selection
 function handleFiles(files) {
-    const fileArray = Array.from(files).filter(file => file.type === 'application/pdf');
+    // Allowed file extensions
+    const allowedExtensions = [
+        'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
+        'odt', 'ods', 'odp', 'rtf', 'txt', 'html', 'htm',
+        'mhtml', 'mht', 'md', 'markdown', 'mkdn', 'mdown', 'mdwn',
+        'msg', 'xlf', 'xliff', 'csv', 'tsv', 'tab'
+    ];
+    
+    const fileArray = Array.from(files).filter(file => {
+        const extension = file.name.split('.').pop().toLowerCase();
+        return allowedExtensions.includes(extension);
+    });
     
     if (fileArray.length === 0) {
-        showError('Please select valid PDF files');
+        showError('Please select valid document files (PDF, Office, Text, etc.)');
         return;
     }
     
@@ -180,6 +191,25 @@ function handleFiles(files) {
     updateStartButton();
 }
 
+// Get file icon based on extension
+function getFileIcon(filename) {
+    const extension = filename.split('.').pop().toLowerCase();
+    const iconMap = {
+        'pdf': '📕',
+        'doc': '📘', 'docx': '📘',
+        'xls': '📗', 'xlsx': '📗',
+        'ppt': '📙', 'pptx': '📙',
+        'odt': '📄', 'ods': '📊', 'odp': '📽️',
+        'txt': '📝', 'rtf': '📝',
+        'html': '🌐', 'htm': '🌐', 'mhtml': '🌐', 'mht': '🌐',
+        'md': '📋', 'markdown': '📋', 'mkdn': '📋', 'mdown': '📋', 'mdwn': '📋',
+        'msg': '📧',
+        'xlf': '🌍', 'xliff': '🌍',
+        'csv': '📊', 'tsv': '📊', 'tab': '📊'
+    };
+    return iconMap[extension] || '📄';
+}
+
 // Update file list display
 function updateFileList() {
     const fileList = document.getElementById('file-list');
@@ -192,7 +222,7 @@ function updateFileList() {
     fileList.innerHTML = uploadedFiles.map((file, index) => `
         <div class="file-item">
             <div class="file-info">
-                <div class="file-icon">📄</div>
+                <div class="file-icon">${getFileIcon(file.name)}</div>
                 <div class="file-details">
                     <h4>${file.name}</h4>
                     <span class="file-size">${formatFileSize(file.size)}</span>
