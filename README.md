@@ -1,5 +1,10 @@
 # Azure Document Translation
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![Code of Conduct](https://img.shields.io/badge/code%20of%20conduct-Microsoft-blue)](CODE_OF_CONDUCT.md)
+[![Security](https://img.shields.io/badge/security-policy-blue)](SECURITY.md)
+
 A complete solution for translating **25+ document formats** using Azure Translator Service and Azure Document Intelligence, with both a **Web UI** and **Command-Line Scripts**.
 
 ## 🎯 Features
@@ -666,16 +671,43 @@ translate-api-and-ui/
 └── output folders/                   # Created automatically
 ```
 
-## Support and Documentation
+## 🤝 Contributing
 
-- **Azure Translator**: https://learn.microsoft.com/azure/cognitive-services/translator/
-- **Azure Document Intelligence**: https://learn.microsoft.com/azure/ai-services/document-intelligence/
-- **Azure Storage**: https://learn.microsoft.com/azure/storage/
-- **Python SDK Docs**: https://learn.microsoft.com/python/api/overview/azure/
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on:
 
-## License
+- Reporting bugs and requesting features
+- Submitting pull requests
+- Coding standards and best practices
+- Development setup and testing
 
-These scripts are provided as-is for use with Azure services.
+## 📞 Support
+
+Need help? Check out [SUPPORT.md](SUPPORT.md) for:
+
+- Common troubleshooting steps
+- Community support resources
+- Azure-specific documentation
+- How to report issues
+
+For security vulnerabilities, see [SECURITY.md](SECURITY.md).
+
+## 📚 Documentation Resources
+
+- **Azure Translator**: [Documentation](https://learn.microsoft.com/azure/cognitive-services/translator/)
+- **Azure Document Intelligence**: [Documentation](https://learn.microsoft.com/azure/ai-services/document-intelligence/)
+- **Azure Storage**: [Documentation](https://learn.microsoft.com/azure/storage/)
+- **Python Azure SDK**: [Documentation](https://learn.microsoft.com/python/api/overview/azure/)
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+Copyright (c) 2025 Microsoft Corporation
+
+## Code of Conduct
+
+This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
+For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
 
 ## 🎨 File Type Support Details
 
@@ -695,17 +727,19 @@ The application uses visual icons to represent different file types:
 
 All formats are natively supported by Azure Translator's Document Translation API with no conversion needed.
 
-## Contributing
+## 💡 Feature Ideas
 
-Feel free to enhance these scripts with additional features:
+Potential enhancements for future development:
 
-- Progress bars
-- Email notifications
-- Webhook integration
-- Custom file naming
+- Progress bars for long-running translations
+- Email notifications on completion
+- Webhook integration for automation
+- Custom file naming templates
 - Metadata preservation
-- Format conversion
-- Additional file format support
+- Additional format conversions
+- Batch scheduling capabilities
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) to contribute features!
 
 ---
 

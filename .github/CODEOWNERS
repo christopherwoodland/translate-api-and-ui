@@ -1,0 +1,23 @@
+# CODEOWNERS file for automatic PR review assignment
+# See https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owners for everything in the repo
+* @christopherwoodland
+
+# Python scripts
+*.py @christopherwoodland
+
+# Web UI components
+/templates/ @christopherwoodland
+/static/ @christopherwoodland
+
+# Documentation
+*.md @christopherwoodland
+/docs/ @christopherwoodland
+
+# Configuration files
+.env.template @christopherwoodland
+requirements.txt @christopherwoodland
+
+# GitHub workflows and templates (if added in future)
+/.github/ @christopherwoodland

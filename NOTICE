@@ -1,0 +1,23 @@
+Azure Document Translation Project
+
+Copyright (c) 2025 Microsoft Corporation
+
+This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft trademarks or logos is subject to and must follow Microsoft's Trademark & Brand Guidelines (https://www.microsoft.com/legal/intellectualproperty/trademarks).
+
+Use of Microsoft trademarks or logos in modified versions of this project must not cause confusion or imply Microsoft sponsorship.
+
+Any use of third-party trademarks or logos are subject to those third-party's policies.
+
+## Third-Party Notices
+
+This project uses the following Azure services:
+- Azure Translator (Azure Cognitive Services)
+- Azure Document Intelligence (Azure AI Services)
+- Azure Blob Storage
+
+This project uses the following open-source packages (see requirements.txt):
+- Flask - BSD-3-Clause License
+- Azure SDK for Python - MIT License
+- python-dotenv - BSD-3-Clause License
+
+For complete license information for these dependencies, please refer to their respective repositories and LICENSE files.
