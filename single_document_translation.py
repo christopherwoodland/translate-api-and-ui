@@ -306,9 +306,10 @@ class SingleDocumentTranslator:
                 elif document.status == "Failed":
                     error_code = document.error.code if document.error else 'Unknown'
                     error_msg = document.error.message if document.error else 'Unknown'
-                    logger.error(f"Translation failed - Code: {error_code}, Message: {error_msg}")
+                    logger.error(f"Translation failed - Target: {target_language} | Code: {error_code}, Message: {error_msg}")
                     
                     print(f"✗ Translation failed!")
+                    print(f"  Target language: {target_language}")
                     print(f"  Error code: {error_code}")
                     print(f"  Error message: {error_msg}")
                     return None

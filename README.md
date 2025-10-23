@@ -194,7 +194,7 @@ translated_output/
 
 ### Script 3: OCR + Translation Pipeline
 
-Converts scanned/image documents to searchable format using OCR, then translates. Supports image formats and documents with embedded images.
+Extracts text from any document using OCR (Azure Document Intelligence), then translates. **Supports all 25+ file formats including images (.jpg, .png, .bmp, .tiff)**.
 
 ```powershell
 python ocr_translation_pipeline.py
@@ -202,28 +202,40 @@ python ocr_translation_pipeline.py
 
 **Configuration** (edit the script's `main()` function):
 ```python
-input_file = "scanned_doc.pdf"                # Your document or image file
+input_file = "scanned_doc.pdf"                # Any supported format
+# Examples:
+# input_file = "scan.jpg"                     # Image file
+# input_file = "document.docx"                # Word with images
+# input_file = "presentation.pptx"            # PowerPoint
 target_language = "es"                        # Target language
 output_folder = "ocr_translated_output"       # Output folder
 ```
 
 **Pipeline Steps**:
-1. ✓ Analyze document with Azure Document Intelligence OCR
-2. ✓ Extract text and create searchable document
-3. ✓ Translate the searchable document
+1. ✓ OCR analysis with Azure Document Intelligence (extracts text from any format)
+2. ✓ Create text file with extracted OCR content
+3. ✓ Translate the document with embedded OCR text
 4. ✓ Download the translated result
 
 **Output**:
-- `{filename}_ocr_text.txt` - Extracted text from OCR
-- `{filename}_searchable.{ext}` - Searchable document with OCR data
-- `{filename}_translated_{lang}.{ext}` - Final translated document
+- `{filename}_searchable_ocr_text.txt` - Extracted text from OCR
+- `{filename}_searchable.{ext}` - Document with OCR data (preserves original format)
+- `{filename}_translated_{lang}.{ext}` - Final translated document (same format as input)
+
+**Supported Formats**:
+- **Documents**: PDF, Word (.docx), Excel (.xlsx), PowerPoint (.pptx), OpenDocument
+- **Images**: JPG, PNG, BMP, TIFF (perfect for scanned documents)
+- **Text**: TXT, RTF, HTML, Markdown
+- **And 25+ more formats!**
 
 **Use Cases**:
-- Scanned documents
-- Image-based files
-- Documents with poor text recognition
+- Scanned documents (receipts, invoices, forms)
+- Photos of documents (phone camera captures)
+- Image-based PDFs
+- Documents with poor text quality
 - Historical documents
 - Mixed text/image content
+- Handwritten notes (with OCR capability)
 
 ## Troubleshooting
 

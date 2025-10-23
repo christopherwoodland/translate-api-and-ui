@@ -36,10 +36,17 @@ env/
 
 # Output folders
 output/
+outputs/
 translated_output/
 ocr_translated_output/
 input_pdfs/
+input_documents/
+
+# Upload folders
+uploads/
+upload/
 
 # Temporary files
 *.tmp
 *.log
+translation_app.log

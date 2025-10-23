@@ -400,6 +400,63 @@ function showResults(job) {
         return lang ? lang.name : code;
     };
     
+    // Helper function to get file extension from URL or filename
+    const getFileExtension = (url) => {
+        const filename = url.split('/').pop().split('?')[0];
+        const ext = filename.split('.').pop().toUpperCase();
+        return ext || 'File';
+    };
+    
+    // Helper function to get descriptive file type
+    const getFileTypeLabel = (url) => {
+        const ext = getFileExtension(url).toLowerCase();
+        const typeMap = {
+            // PDF
+            'pdf': 'PDF',
+            // Microsoft Office
+            'docx': 'Word Document',
+            'doc': 'Word Document',
+            'xlsx': 'Excel Spreadsheet',
+            'xls': 'Excel Spreadsheet',
+            'pptx': 'PowerPoint',
+            'ppt': 'PowerPoint',
+            // OpenDocument
+            'odt': 'OpenDocument Text',
+            'ods': 'OpenDocument Spreadsheet',
+            'odp': 'OpenDocument Presentation',
+            // Text formats
+            'txt': 'Text File',
+            'rtf': 'Rich Text',
+            // Markup
+            'html': 'HTML',
+            'htm': 'HTML',
+            'mhtml': 'MHTML',
+            'mht': 'MHTML',
+            'md': 'Markdown',
+            'markdown': 'Markdown',
+            'mkdn': 'Markdown',
+            'mdown': 'Markdown',
+            'mdwn': 'Markdown',
+            // Email
+            'msg': 'Email Message',
+            // Localization
+            'xlf': 'Localization File',
+            'xliff': 'Localization File',
+            // Data
+            'csv': 'CSV',
+            'tsv': 'TSV',
+            'tab': 'Tab-Delimited',
+            // Images
+            'jpg': 'Image (JPG)',
+            'jpeg': 'Image (JPEG)',
+            'png': 'Image (PNG)',
+            'bmp': 'Image (BMP)',
+            'tiff': 'Image (TIFF)',
+            'tif': 'Image (TIFF)'
+        };
+        return typeMap[ext] || ext.toUpperCase() + ' File';
+    };
+    
     // Build language detection info - always show it
     let languageInfo = '';
     const detectedLang = job.result.detected_source_language;
@@ -428,6 +485,7 @@ function showResults(job) {
     
     if (job.job_type === 'single') {
         const targetLangName = job.result.target_language ? getLanguageName(job.result.target_language) : '';
+        const fileType = getFileTypeLabel(job.result.download_url);
         content.innerHTML = `
             <div class="result-item">
                 <h3>Translation Complete</h3>
@@ -435,7 +493,7 @@ function showResults(job) {
                 ${job.result.target_language ? `<div class="language-info"><strong>Target Language:</strong> ${targetLangName} (${job.result.target_language})</div>` : ''}
                 <p>Your translated document is ready for download.</p>
                 <a href="${job.result.download_url}" class="download-link" download>
-                    📥 Download Translated PDF
+                    📥 Download Translated ${fileType}
                 </a>
             </div>
         `;
@@ -481,6 +539,8 @@ function showResults(job) {
         content.innerHTML = html;
     } else if (job.job_type === 'ocr') {
         const targetLangName = job.result.target_language ? getLanguageName(job.result.target_language) : '';
+        const searchableFileType = getFileTypeLabel(job.result.download_urls.searchable_pdf);
+        const translatedFileType = getFileTypeLabel(job.result.download_urls.translated_pdf);
         content.innerHTML = `
             <div class="result-item">
                 <h3>OCR + Translation Complete</h3>
@@ -491,10 +551,10 @@ function showResults(job) {
                     📄 Download OCR Text
                 </a>
                 <a href="${job.result.download_urls.searchable_pdf}" class="download-link" download>
-                    📄 Download Searchable PDF
+                    📄 Download Searchable ${searchableFileType}
                 </a>
                 <a href="${job.result.download_urls.translated_pdf}" class="download-link" download>
-                    📥 Download Translated PDF
+                    📥 Download Translated ${translatedFileType}
                 </a>
             </div>
         `;

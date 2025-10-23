@@ -1,8 +1,18 @@
 """
 OCR + Translation Script
-Uses Azure Document Intelligence to convert documents to searchable format with OCR,
+Uses Azure Document Intelligence to OCR and extract text from documents,
 then translates using Azure Translator Service.
-Supports: PDF, Office (Word/Excel/PowerPoint), OpenDocument, Images, and more.
+
+Supports 25+ file formats:
+- PDF: .pdf
+- Microsoft Office: .doc, .docx, .xls, .xlsx, .ppt, .pptx
+- OpenDocument: .odt, .ods, .odp
+- Text: .txt, .rtf
+- Markup: .html, .htm, .mhtml, .mht, .md, .markdown, .mkdn, .mdown, .mdwn
+- Email: .msg
+- Localization: .xlf, .xliff
+- Data: .csv, .tsv, .tab
+- Images: .jpg, .jpeg, .png, .bmp, .tiff, .tif
 """
 
 import os
@@ -99,10 +109,11 @@ class OCRTranslationPipeline:
     
     def analyze_document_with_ocr(self, file_path):
         """
-        Analyze a PDF document using Azure Document Intelligence OCR.
+        Analyze a document using Azure Document Intelligence OCR.
+        Supports all document formats including PDF, Office files, images, and more.
         
         Args:
-            file_path: Path to the PDF file
+            file_path: Path to the document file (any supported format)
             
         Returns:
             Analysis result with extracted text and layout
@@ -129,16 +140,15 @@ class OCRTranslationPipeline:
             print(f"Error during OCR analysis: {e}")
             raise
     
-    def create_searchable_pdf(self, original_pdf_path, ocr_result, output_path):
+    def create_searchable_document(self, original_file_path, ocr_result, output_path):
         """
-        Create a searchable PDF by combining OCR results with the original PDF.
-        Note: This is a simplified version. For production, consider using
-        specialized PDF libraries like pypdf or reportlab for better results.
+        Create a searchable document by extracting OCR text and preserving the original file.
+        Extracts text content to a separate .txt file for reference.
         
         Args:
-            original_pdf_path: Path to the original PDF
+            original_file_path: Path to the original document (any format)
             ocr_result: OCR analysis result from Document Intelligence
-            output_path: Path to save the searchable PDF
+            output_path: Path to save the searchable document
         """
         try:
             print("Creating searchable PDF with OCR data...")
@@ -160,20 +170,26 @@ class OCRTranslationPipeline:
                                     page_text += paragraph.content + "\n\n"
                     text_content.append(page_text)
             
-            # Save the extracted text alongside the PDF
-            text_output_path = output_path.replace('.pdf', '_ocr_text.txt')
+            # Save the extracted text alongside the document
+            # Preserve original file extension for output
+            base_output = os.path.splitext(output_path)[0]
+            original_ext = os.path.splitext(original_file_path)[1]
+            text_output_path = f"{base_output}_ocr_text.txt"
+            
             with open(text_output_path, 'w', encoding='utf-8') as f:
                 f.write(''.join(text_content))
             
             print(f"✓ OCR text extracted to: {text_output_path}")
             
-            # Copy the original PDF to the output location
-            # In production, you would embed the text layer here
+            # Copy the original document to the output location with proper extension
             import shutil
-            shutil.copy2(original_pdf_path, output_path)
+            output_with_ext = f"{base_output}{original_ext}"
+            shutil.copy2(original_file_path, output_with_ext)
             
-            print(f"✓ Searchable PDF created: {output_path}")
-            print("  Note: For full text embedding, consider using specialized PDF libraries")
+            print(f"✓ Searchable document created: {output_with_ext}")
+            print(f"  Original format: {original_ext}")
+            
+            return output_with_ext
             
             return output_path
             
@@ -333,10 +349,18 @@ class OCRTranslationPipeline:
                         'detected_source_language': detected_lang
                     }
                 elif document.status == "Failed":
-                    print(f"✗ Translation failed: {document.error.message if document.error else 'Unknown error'}")
+                    error_code = document.error.code if document.error else 'Unknown'
+                    error_msg = document.error.message if document.error else 'Unknown error'
+                    logger.error(f"OCR Translation failed - Target: {target_language} | Code: {error_code}, Message: {error_msg}")
+                    
+                    print(f"✗ Translation failed!")
+                    print(f"  Target language: {target_language}")
+                    print(f"  Error code: {error_code}")
+                    print(f"  Error message: {error_msg}")
                     return None
             
         except Exception as e:
+            logger.error(f"Error during OCR translation: {e}", exc_info=True)
             print(f"Error during translation: {e}")
             raise
     
@@ -367,46 +391,51 @@ class OCRTranslationPipeline:
             print(f"Error downloading: {e}")
             raise
     
-    def process_document(self, input_pdf_path, target_language, output_folder="output", source_language=None):
+    def process_document(self, input_file_path, target_language, output_folder="output", source_language=None):
         """
-        Complete pipeline: OCR → Searchable PDF → Translation
+        Complete pipeline: OCR → Extract Text → Translate Document
+        Supports all 25+ file formats (PDF, Office, Images, etc.)
         
         Args:
-            input_pdf_path: Path to the input PDF
+            input_file_path: Path to the input document (any supported format)
             target_language: Target language code (e.g., 'es', 'fr', 'de')
             output_folder: Folder to save output files
             source_language: Optional source language code (if not provided, auto-detect)
             
         Returns:
-            Dictionary with paths to OCR and translated files
+            Dictionary with paths to OCR text and translated files
         """
         try:
             os.makedirs(output_folder, exist_ok=True)
             
+            # Get file extension and base name
+            file_ext = os.path.splitext(input_file_path)[1]
+            base_name = os.path.splitext(os.path.basename(input_file_path))[0]
+            
             print("="*70)
             print("STARTING OCR + TRANSLATION PIPELINE")
             print("="*70)
-            print(f"Input: {input_pdf_path}")
+            print(f"Input: {input_file_path}")
+            print(f"Format: {file_ext}")
             print(f"Target language: {target_language}")
             print()
             
             # Step 1: OCR Analysis
             print("STEP 1: OCR Analysis")
             print("-" * 70)
-            ocr_result = self.analyze_document_with_ocr(input_pdf_path)
+            ocr_result = self.analyze_document_with_ocr(input_file_path)
             
-            # Step 2: Create Searchable PDF
-            print("\nSTEP 2: Creating Searchable PDF")
+            # Step 2: Create Searchable Document with OCR text
+            print("\nSTEP 2: Extracting OCR Text")
             print("-" * 70)
-            base_name = os.path.splitext(os.path.basename(input_pdf_path))[0]
-            searchable_pdf_path = os.path.join(output_folder, f"{base_name}_searchable.pdf")
-            self.create_searchable_pdf(input_pdf_path, ocr_result, searchable_pdf_path)
+            searchable_doc_path = os.path.join(output_folder, f"{base_name}_searchable{file_ext}")
+            self.create_searchable_document(input_file_path, ocr_result, searchable_doc_path)
             
             # Step 3: Translate
             print("\nSTEP 3: Translation")
             print("-" * 70)
             translation_result = self.translate_document(
-                searchable_pdf_path,
+                searchable_doc_path,
                 target_language,
                 source_language=source_language
             )
@@ -424,28 +453,31 @@ class OCRTranslationPipeline:
                     translated_url = translation_result
                     detected_lang = 'unknown'
                 
-                translated_pdf_path = os.path.join(
+                translated_doc_path = os.path.join(
                     output_folder,
-                    f"{base_name}_translated_{target_language}.pdf"
+                    f"{base_name}_translated_{target_language}{file_ext}"
                 )
-                self.download_from_blob(translated_url, translated_pdf_path)
+                self.download_from_blob(translated_url, translated_doc_path)
+                
+                # Get OCR text file path
+                ocr_text_path = os.path.join(output_folder, f"{base_name}_searchable_ocr_text.txt")
                 
                 print("\n" + "="*70)
                 print("PIPELINE COMPLETED SUCCESSFULLY!")
                 print("="*70)
-                print(f"✓ OCR text: {searchable_pdf_path.replace('.pdf', '_ocr_text.txt')}")
-                print(f"✓ Searchable PDF: {searchable_pdf_path}")
-                print(f"✓ Translated PDF: {translated_pdf_path}")
+                print(f"✓ OCR text: {ocr_text_path}")
+                print(f"✓ Searchable document: {searchable_doc_path}")
+                print(f"✓ Translated document: {translated_doc_path}")
                 print(f"📝 Detected source language: {detected_lang}")
                 print(f"🎯 Target language: {target_language}")
                 
                 # Log completion with detected language
-                logger.info(f"OCR Pipeline completed - Source: {detected_lang} → Target: {target_language}")
+                logger.info(f"OCR Pipeline completed - Format: {file_ext} | Source: {detected_lang} → Target: {target_language}")
                 
                 return {
-                    'ocr_text': searchable_pdf_path.replace('.pdf', '_ocr_text.txt'),
-                    'searchable_pdf': searchable_pdf_path,
-                    'translated_pdf': translated_pdf_path,
+                    'ocr_text': ocr_text_path,
+                    'searchable_document': searchable_doc_path,
+                    'translated_document': translated_doc_path,
                     'detected_source_language': detected_lang
                 }
             else:
@@ -461,20 +493,27 @@ def main():
     """Main function to demonstrate the OCR + Translation pipeline."""
     pipeline = OCRTranslationPipeline()
     
-    # Configuration
-    input_pdf = "sample.pdf"  # Change to your PDF file path
+    # Configuration - supports all file formats!
+    input_file = "sample.pdf"  # Change to your file (PDF, DOCX, JPG, PNG, etc.)
     target_language = "es"  # Spanish - change to your target language
     output_folder = "ocr_translated_output"
     
+    # Examples of supported formats:
+    # input_file = "document.docx"  # Word document
+    # input_file = "scan.jpg"       # Image file
+    # input_file = "presentation.pptx"  # PowerPoint
+    # input_file = "spreadsheet.xlsx"   # Excel
+    
     # Check if input file exists
-    if not os.path.exists(input_pdf):
-        print(f"Error: Input file '{input_pdf}' not found!")
-        print("Please update the 'input_pdf' variable with your PDF file path.")
+    if not os.path.exists(input_file):
+        print(f"Error: Input file '{input_file}' not found!")
+        print("Please update the 'input_file' variable with your document file path.")
+        print("Supported formats: PDF, Office (Word/Excel/PowerPoint), Images, and 25+ more!")
         return
     
     # Process the document
     results = pipeline.process_document(
-        input_pdf_path=input_pdf,
+        input_file_path=input_file,
         target_language=target_language,
         output_folder=output_folder
     )

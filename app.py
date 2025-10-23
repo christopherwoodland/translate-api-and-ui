@@ -308,18 +308,21 @@ def run_ocr_translation(job_id, file_path, target_language, source_language=None
         
         job.update(progress=20, message="Running OCR analysis...")
         results = pipeline.process_document(
-            input_pdf_path=file_path,
+            input_file_path=file_path,
             target_language=target_language,
             output_folder=output_folder,
             source_language=source_language
         )
         
         if results:
-            # Prepare download URLs
+            # Prepare download URLs - support both old (PDF) and new (all formats) keys
+            searchable_key = 'searchable_document' if 'searchable_document' in results else 'searchable_pdf'
+            translated_key = 'translated_document' if 'translated_document' in results else 'translated_pdf'
+            
             download_urls = {
                 'ocr_text': f'/download/ocr_{job_id}/{os.path.basename(results["ocr_text"])}',
-                'searchable_pdf': f'/download/ocr_{job_id}/{os.path.basename(results["searchable_pdf"])}',
-                'translated_pdf': f'/download/ocr_{job_id}/{os.path.basename(results["translated_pdf"])}'
+                'searchable_pdf': f'/download/ocr_{job_id}/{os.path.basename(results[searchable_key])}',
+                'translated_pdf': f'/download/ocr_{job_id}/{os.path.basename(results[translated_key])}'
             }
             
             detected_lang = results.get('detected_source_language', 'unknown')

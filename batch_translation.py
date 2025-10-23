@@ -196,12 +196,22 @@ class BatchDocumentTranslator:
             for lang in target_languages:
                 target_container_name = f"{target_container_prefix}-{lang}"
                 
+                # Log container name for debugging
+                logger.info(f"Creating target container for language '{lang}': {target_container_name}")
+                
+                # Validate container name length (Azure requirement: 3-63 characters)
+                if len(target_container_name) < 3:
+                    error_msg = f"Container name too short for language '{lang}': {target_container_name} (length: {len(target_container_name)})"
+                    logger.error(error_msg)
+                    raise ValueError(error_msg)
+                
                 # Create target container
                 target_container_client = self.blob_service_client.get_container_client(target_container_name)
                 try:
                     # Create container without public access (SAS tokens will provide access)
                     target_container_client.create_container()
                     print(f"Created target container: {target_container_name}")
+                    logger.info(f"Successfully created container: {target_container_name}")
                 except Exception as e:
                     # Container might already exist, which is fine
                     if "ContainerAlreadyExists" in str(e) or "already exists" in str(e).lower():
@@ -311,9 +321,16 @@ class BatchDocumentTranslator:
                 elif document.status == "Failed":
                     failure_count += 1
                     source_file = os.path.basename(document.source_document_url.split('?')[0])
+                    target_lang = getattr(document, 'translated_to', 'unknown')
+                    error_code = document.error.code if document.error else 'Unknown'
+                    error_msg = document.error.message if document.error else 'Unknown error'
                     
-                    print(f"\n✗ {source_file} - FAILED")
-                    print(f"  Error: {document.error.message if document.error else 'Unknown error'}")
+                    print(f"\n✗ {source_file} → {target_lang} - FAILED")
+                    print(f"  Error Code: {error_code}")
+                    print(f"  Error Message: {error_msg}")
+                    
+                    # Log detailed error information
+                    logger.error(f"Translation failed: {source_file} → {target_lang} | Error: {error_code} - {error_msg}")
                     
             print("\n" + "="*70)
             print(f"SUMMARY: {success_count} succeeded, {failure_count} failed")
