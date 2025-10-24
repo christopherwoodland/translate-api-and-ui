@@ -332,6 +332,12 @@ class OCRTranslationPipeline:
                 )
                 target_url = f"https://{self.storage_account_name}.blob.core.windows.net/{target_container}?{target_sas}"
             
+            # Check if source and target languages are the same
+            if source_language and source_language.lower() == target_language.lower():
+                error_msg = f"Source language ({source_language}) and target language ({target_language}) are the same - no translation needed"
+                print(f"Error: {error_msg}")
+                raise ValueError(error_msg)
+            
             # Start translation
             # Build translation input with optional source language
             translation_kwargs = {

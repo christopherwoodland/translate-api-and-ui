@@ -276,6 +276,13 @@ class SingleDocumentTranslator:
             
             # Add source language if specified (otherwise Azure will auto-detect)
             if source_language:
+                # Check if source and target languages are the same
+                if source_language.lower() == target_language.lower():
+                    error_msg = f"Source language ({source_language}) and target language ({target_language}) are the same - no translation needed"
+                    logger.error(error_msg)
+                    print(f"Error: {error_msg}")
+                    raise ValueError(error_msg)
+                
                 translation_kwargs['source_language'] = source_language
                 logger.info(f"Using specified source language: {source_language}")
                 print(f"Using specified source language: {source_language}")
@@ -309,6 +316,13 @@ class SingleDocumentTranslator:
                     # Note: Azure Document Translation API does not expose detected source language
                     # The API detects language internally but doesn't return it in the response
                     detected_lang = 'auto-detected'
+                    
+                    # Warning: If auto-detection was used, we can't verify if source == target
+                    # Azure will still process the translation even if languages match
+                    if not source_language:
+                        logger.warning(f"Source language was auto-detected - cannot verify if it matches target ({target_language})")
+                        print(f"\n  WARNING: Source language was auto-detected")
+                        print(f"  If the document is already in {target_language}, the translation may be unnecessary")
                     
                     logger.info(f"Translation successful - Source: {detected_lang} -> Target: {target_language}")
                     print(f"\n  Detected source language: {detected_lang}")

@@ -265,6 +265,16 @@ class BatchDocumentTranslator:
             
             # Set up batch translation
             print("\nStarting batch translation job...")
+            
+            # Check if source language matches any target languages
+            if source_language:
+                matching_langs = [lang for lang in target_languages if lang.lower() == source_language.lower()]
+                if matching_langs:
+                    error_msg = f"Source language ({source_language}) matches target language(s): {', '.join(matching_langs)} - no translation needed"
+                    logger.error(error_msg)
+                    print(f"Error: {error_msg}")
+                    raise ValueError(error_msg)
+            
             # Build translation input with optional source language
             translation_kwargs = {
                 'source_url': source_container_url,
