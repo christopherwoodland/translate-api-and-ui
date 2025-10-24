@@ -123,14 +123,14 @@ function selectType(type) {
     const languageLimitNotice = document.getElementById('language-limit-notice');
     const languageLimitText = document.getElementById('language-limit-text');
     
-    if (type === 'single' || type === 'ocr') {
+    if (type === 'ocr') {
         fileInput.removeAttribute('multiple');
         fileLimitText.textContent = 'Select one document file (max 100MB)';
         languageLimitNotice.style.display = 'block';
         languageLimitText.textContent = 'Select exactly one target language';
     } else {
         fileInput.setAttribute('multiple', 'multiple');
-        fileLimitText.textContent = 'Select multiple document files (max 100MB each)';
+        fileLimitText.textContent = 'Select one or more document files (max 100MB each)';
         languageLimitNotice.style.display = 'block';
         languageLimitText.textContent = 'Select one or more target languages';
     }
@@ -163,8 +163,8 @@ function handleFiles(files) {
         return;
     }
     
-    // For single/ocr, only allow one file
-    if ((selectedType === 'single' || selectedType === 'ocr') && uploadedFiles.length > 0) {
+    // For OCR, only allow one file
+    if (selectedType === 'ocr' && uploadedFiles.length > 0) {
         uploadedFiles = [];
     }
     
@@ -174,7 +174,7 @@ function handleFiles(files) {
             return;
         }
         
-        if ((selectedType === 'single' || selectedType === 'ocr') && uploadedFiles.length === 0) {
+        if (selectedType === 'ocr' && uploadedFiles.length === 0) {
             uploadedFiles.push(file);
         } else if (selectedType === 'batch') {
             uploadedFiles.push(file);
@@ -249,7 +249,7 @@ function removeFile(index) {
 function toggleLanguage(code) {
     const option = document.querySelector(`.language-option[data-code="${code}"]`);
     
-    if (selectedType === 'single' || selectedType === 'ocr') {
+    if (selectedType === 'ocr') {
         // Single selection
         selectedLanguages = [code];
         document.querySelectorAll('.language-option').forEach(opt => {
