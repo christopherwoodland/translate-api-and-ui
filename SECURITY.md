@@ -57,10 +57,15 @@ When using this project:
 
 ### Network Security
 
+- **Use Azure Private Link** (Recommended for production)
+  - Eliminates public internet exposure for Azure services
+  - Traffic stays within Azure backbone network
+  - See README.md for Private Link setup instructions
 - Restrict storage account access using firewall rules
-- Use private endpoints for Azure services when available
+- Disable public network access when using Private Link
 - Enable HTTPS-only for storage accounts
 - Use Azure Virtual Networks for additional isolation
+- Configure VNet integration for App Service/Container Apps
 
 ### Data Protection
 

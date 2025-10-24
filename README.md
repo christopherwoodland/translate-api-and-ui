@@ -566,6 +566,36 @@ The application includes comprehensive logging for troubleshooting and monitorin
 - ✅ Container creation and blob operations
 - ✅ Errors with detailed stack traces
 - ✅ Processing times and progress updates
+- ✅ **HTTP API Calls** - Full request/response details including headers
+
+**API Call Logging (Detailed Debug):**
+
+The application now logs all Azure SDK HTTP requests and responses:
+
+```
+2025-10-23 14:30:45 - azure.core.pipeline.policies.http_logging_policy - INFO - Request URL: 'https://translator.cognitiveservices.azure.com/...'
+Request method: 'POST'
+Request headers:
+    'Content-Type': 'application/json'
+    'Ocp-Apim-Subscription-Key': 'REDACTED'
+    'User-Agent': 'azsdk-python-ai-translation-document/...'
+    'x-ms-client-request-id': '...'
+Request body: {...}
+
+2025-10-23 14:30:46 - azure.core.pipeline.policies.http_logging_policy - INFO - Response status: 202
+Response headers:
+    'operation-location': 'https://...'
+    'x-ms-request-id': '...'
+```
+
+**What API Logging Shows:**
+- Full request URLs and HTTP methods
+- Request headers (credentials are REDACTED automatically)
+- Request body/payload
+- Response status codes (200, 202, 400, etc.)
+- Response headers
+- Response body content
+- Timing information
 
 **Log Format:**
 ```
@@ -575,9 +605,53 @@ The application includes comprehensive logging for troubleshooting and monitorin
 ```
 
 **Viewing Logs:**
-- Console output shows real-time progress
-- Check `translation_app.log` for detailed history
+- Console output shows real-time progress with API calls
+- Check `translation_app.log` for detailed history with full HTTP traces
 - Logs include emoji indicators (✓, →, ✗) for easy scanning
+- API credentials are automatically redacted for security
+
+### Enabling Detailed API Logging
+
+To see full HTTP request/response details including headers:
+
+**Option 1: Environment Variable (Recommended)**
+
+Add to your `.env` file:
+```bash
+LOG_LEVEL=DEBUG
+```
+
+**Option 2: Temporary (Single Run)**
+
+```powershell
+# Windows PowerShell
+$env:LOG_LEVEL="DEBUG"; python single_document_translation.py
+
+# Linux/Mac
+LOG_LEVEL=DEBUG python single_document_translation.py
+```
+
+**Log Levels:**
+- `DEBUG` - Full API details (requests, headers, responses, timing)
+- `INFO` - Standard application logs (default)
+- `WARNING` - Warnings and errors only
+- `ERROR` - Errors only
+
+**Example DEBUG Output:**
+```
+🔍 API call logging enabled - HTTP requests, headers, and responses will be logged
+2025-10-23 14:30:45 - azure.core.pipeline.policies.http_logging_policy - INFO - Request URL: 'https://translator.cognitiveservices.azure.com/translator/document/batches'
+Request method: 'POST'
+Request headers:
+    'Content-Type': 'application/json'
+    'Ocp-Apim-Subscription-Key': 'REDACTED'
+    'User-Agent': 'azsdk-python-ai-translation-document/1.1.0 Python/3.13.9 (Windows-11-10.0.26200)'
+    'x-ms-client-request-id': 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'
+Response status: 202
+Response headers:
+    'operation-location': 'https://translator.cognitiveservices.azure.com/translator/document/operations/...'
+    'x-ms-request-id': '12345678-1234-1234-1234-123456789012'
+```
 
 ## Advanced Configuration
 
@@ -613,6 +687,157 @@ def __init__(self, use_managed_identity=None):
 - If `AZURE_STORAGE_CONNECTION_STRING` is set → Key-based authentication
 - If `AZURE_STORAGE_CONNECTION_STRING` is NOT set → Managed Identity
 - Can be overridden with explicit `USE_MANAGED_IDENTITY=true/false`
+
+### 🔒 Azure Private Link Support
+
+**Yes, this code fully supports Azure Private Link!** The Azure SDK clients automatically use private endpoints when configured.
+
+#### How It Works
+
+The application connects to Azure services using the SDK clients:
+- `BlobServiceClient` - Connects to `https://{account}.blob.core.windows.net`
+- `DocumentTranslationClient` - Connects to your Translator endpoint
+- `DocumentAnalysisClient` - Connects to your Document Intelligence endpoint
+
+When Private Link is configured, Azure DNS automatically resolves these endpoints to private IP addresses within your VNet.
+
+#### Setup for Private Link
+
+**1. Create Private Endpoints (Azure Portal or CLI):**
+
+```bash
+# Storage Account Private Endpoint
+az network private-endpoint create \
+  --name storage-private-endpoint \
+  --resource-group <resource-group> \
+  --vnet-name <vnet-name> \
+  --subnet <subnet-name> \
+  --private-connection-resource-id /subscriptions/<sub-id>/resourceGroups/<rg>/providers/Microsoft.Storage/storageAccounts/<storage-account> \
+  --group-id blob \
+  --connection-name storage-connection
+
+# Translator Private Endpoint
+az network private-endpoint create \
+  --name translator-private-endpoint \
+  --resource-group <resource-group> \
+  --vnet-name <vnet-name> \
+  --subnet <subnet-name> \
+  --private-connection-resource-id /subscriptions/<sub-id>/resourceGroups/<rg>/providers/Microsoft.CognitiveServices/accounts/<translator-name> \
+  --group-id account \
+  --connection-name translator-connection
+```
+
+**2. Configure Private DNS Zones:**
+
+Azure automatically creates DNS records for:
+- `privatelink.blob.core.windows.net` (Storage)
+- `privatelink.cognitiveservices.azure.com` (Translator/Document Intelligence)
+
+**3. Network Configuration:**
+
+For applications running in Azure (App Service, VMs, Container Apps):
+- Enable **VNet Integration** to access private endpoints
+- Application automatically uses private DNS resolution
+- No code changes required!
+
+```bash
+# Enable VNet integration for App Service
+az webapp vnet-integration add \
+  --name <app-name> \
+  --resource-group <resource-group> \
+  --vnet <vnet-name> \
+  --subnet <subnet-name>
+```
+
+**4. Storage Firewall Settings:**
+
+When using Private Link, configure storage firewall:
+
+```bash
+# Disable public network access (private only)
+az storage account update \
+  --name <storage-account> \
+  --resource-group <resource-group> \
+  --default-action Deny \
+  --public-network-access Disabled
+```
+
+Or allow specific VNets:
+
+```bash
+# Allow specific VNet
+az storage account network-rule add \
+  --account-name <storage-account> \
+  --vnet-name <vnet-name> \
+  --subnet <subnet-name>
+```
+
+#### Authentication with Private Link
+
+**Managed Identity (Recommended):**
+- Works seamlessly with Private Link
+- No connection strings or keys needed
+- Application uses private endpoint automatically
+
+**Key-Based (Connection String):**
+- Also works with Private Link
+- Connection string includes public endpoint URL
+- Azure SDK automatically resolves to private IP when Private Link is configured
+
+#### Testing Private Link
+
+**Verify private endpoint is being used:**
+
+1. From your Azure VM/App Service:
+```bash
+# Should resolve to private IP (10.x.x.x)
+nslookup <storage-account>.blob.core.windows.net
+```
+
+2. Check application logs - connections should succeed even with public access disabled
+
+3. Test translation:
+```bash
+python single_document_translation.py
+# Should work normally using private connection
+```
+
+#### Troubleshooting Private Link
+
+**Issue: Connection timeout or "Name or service not known"**
+- **Solution**: Ensure VNet integration is enabled for your App Service
+- **Solution**: Verify Private DNS Zone is linked to your VNet
+- **Solution**: Check NSG rules allow outbound traffic on port 443
+
+**Issue: "Public network access is disabled"**
+- **Solution**: Ensure your application is running in the same VNet as the private endpoint
+- **Solution**: Check VNet integration is configured correctly
+- **Solution**: Verify subnet has access to private endpoint
+
+**Issue: Managed Identity doesn't work with Private Link**
+- **Solution**: Ensure Managed Identity has proper RBAC roles (Storage Blob Data Contributor)
+- **Solution**: Managed Identity works with Private Link - no special configuration needed
+
+#### Benefits of Private Link
+
+✅ **Enhanced Security**: Traffic stays within Azure backbone network  
+✅ **No Internet Exposure**: Storage and services not accessible from public internet  
+✅ **Network Isolation**: Services accessible only from your VNet  
+✅ **Compliance**: Meet regulatory requirements for data residency  
+✅ **Reduced Attack Surface**: Eliminate public endpoints  
+✅ **Works with Managed Identity**: Best of both worlds
+
+#### Architecture Example
+
+```
+[App Service with VNet Integration]
+         ↓ (Private Connection)
+[Private Endpoint in VNet]
+         ↓ (10.x.x.x)
+[Azure Storage Account] ← Public Access: Disabled
+         ↓ (Private Connection)
+[Azure Translator Service] ← Private Endpoint
+```
 
 ### Custom Storage Containers
 

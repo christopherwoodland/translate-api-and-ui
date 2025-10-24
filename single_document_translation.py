@@ -17,13 +17,29 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-# Configure logging
+# Get log level from environment variable (default to INFO)
+log_level_str = os.getenv('LOG_LEVEL', 'INFO').upper()
+log_level = getattr(logging, log_level_str, logging.INFO)
+
+# Configure logging with Azure SDK HTTP logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=log_level,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
+    datefmt='%Y-%m-%d %H:%M:%S',
+    handlers=[
+        logging.FileHandler('translation_app.log'),
+        logging.StreamHandler()
+    ]
 )
 logger = logging.getLogger(__name__)
+
+# Enable Azure SDK HTTP request/response logging (DEBUG level shows full API details)
+azure_logger = logging.getLogger('azure.core.pipeline.policies.http_logging_policy')
+azure_logger.setLevel(log_level)
+if log_level == logging.DEBUG:
+    logger.info("API call logging enabled - HTTP requests, headers, and responses will be logged")
+else:
+    logger.info(f"Logging level: {log_level_str}")
 
 
 class SingleDocumentTranslator:
@@ -58,7 +74,7 @@ class SingleDocumentTranslator:
         # Initialize translation client
         if use_managed_identity:
             logger.info("Using Managed Identity for authentication")
-            print("🔐 Using Managed Identity for authentication")
+            print("Using Managed Identity for authentication")
             credential = DefaultAzureCredential()
             self.translation_client = DocumentTranslationClient(
                 self.translator_endpoint,
@@ -70,7 +86,7 @@ class SingleDocumentTranslator:
             )
         else:
             logger.info("Using Key-based authentication")
-            print("🔑 Using Key-based authentication")
+            print("Using Key-based authentication")
             if not self.translator_key or not self.storage_connection_string:
                 logger.error("Missing keys for key-based authentication")
                 raise ValueError("Missing AZURE_TRANSLATOR_KEY or AZURE_STORAGE_CONNECTION_STRING for key-based auth")
@@ -286,7 +302,7 @@ class SingleDocumentTranslator:
                     logger.debug(f"Source URL: {document.source_document_url}")
                     logger.debug(f"Translated URL: {document.translated_document_url}")
                     
-                    print(f"✓ Translation completed successfully!")
+                    print(f"Translation completed successfully!")
                     print(f"  Source document: {document.source_document_url}")
                     print(f"  Translated document: {document.translated_document_url}")
                     
@@ -294,9 +310,9 @@ class SingleDocumentTranslator:
                     # The API detects language internally but doesn't return it in the response
                     detected_lang = 'auto-detected'
                     
-                    logger.info(f"✓ Translation successful - Source: {detected_lang} → Target: {target_language}")
-                    print(f"\n  📝 Detected source language: {detected_lang}")
-                    print(f"  🎯 Target language: {target_language}")
+                    logger.info(f"Translation successful - Source: {detected_lang} -> Target: {target_language}")
+                    print(f"\n  Detected source language: {detected_lang}")
+                    print(f"  Target language: {target_language}")
                     
                     # Return both URL and detected language
                     return {
@@ -308,7 +324,7 @@ class SingleDocumentTranslator:
                     error_msg = document.error.message if document.error else 'Unknown'
                     logger.error(f"Translation failed - Target: {target_language} | Code: {error_code}, Message: {error_msg}")
                     
-                    print(f"✗ Translation failed!")
+                    print(f"Translation failed!")
                     print(f"  Target language: {target_language}")
                     print(f"  Error code: {error_code}")
                     print(f"  Error message: {error_msg}")
@@ -384,11 +400,11 @@ def main():
         
         # Download the translated document
         translator.download_translated_document(translated_url, output_pdf)
-        print(f"\n✓ Translation complete! Output saved to: {output_pdf}")
-        print(f"  📝 Detected source language: {detected_lang}")
-        print(f"  🎯 Target language: {target_language}")
+        print(f"\nTranslation complete! Output saved to: {output_pdf}")
+        print(f"  Detected source language: {detected_lang}")
+        print(f"  Target language: {target_language}")
     else:
-        print("\n✗ Translation failed.")
+        print("\nTranslation failed.")
 
 
 if __name__ == "__main__":

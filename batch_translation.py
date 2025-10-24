@@ -18,13 +18,29 @@ from pathlib import Path
 # Load environment variables
 load_dotenv()
 
-# Configure logging
+# Get log level from environment variable (default to INFO)
+log_level_str = os.getenv('LOG_LEVEL', 'INFO').upper()
+log_level = getattr(logging, log_level_str, logging.INFO)
+
+# Configure logging with Azure SDK HTTP logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=log_level,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
+    datefmt='%Y-%m-%d %H:%M:%S',
+    handlers=[
+        logging.FileHandler('translation_app.log'),
+        logging.StreamHandler()
+    ]
 )
 logger = logging.getLogger(__name__)
+
+# Enable Azure SDK HTTP request/response logging (DEBUG level shows full API details)
+azure_logger = logging.getLogger('azure.core.pipeline.policies.http_logging_policy')
+azure_logger.setLevel(log_level)
+if log_level == logging.DEBUG:
+    logger.info("API call logging enabled - HTTP requests, headers, and responses will be logged")
+else:
+    logger.info(f"Logging level: {log_level_str}")
 
 
 class BatchDocumentTranslator:

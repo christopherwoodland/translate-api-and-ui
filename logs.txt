@@ -1,0 +1,10 @@
+2025-10-23 22:20:09 - __main__ - INFO - Flask app starting - Managed Identity: False
+2025-10-23 22:20:09 - __main__ - INFO - Upload folder: uploads
+2025-10-23 22:20:09 - __main__ - INFO - Output folder: outputs
+2025-10-23 22:20:09 - __main__ - INFO - ======================================================================
+2025-10-23 22:20:09 - __main__ - INFO - Starting Flask application
+2025-10-23 22:20:09 - __main__ - INFO - Server accessible at: http://localhost:5000
+2025-10-23 22:20:09 - __main__ - INFO - ======================================================================
+2025-10-23 22:20:09 - werkzeug - WARNING -  * Debugger is active!
+2025-10-23 22:20:09 - werkzeug - INFO -  * Debugger PIN: 114-272-953
+2025-10-23 22:20:37 - werkzeug - INFO -  * Detected change in 'C:\\Users\\cwoodland\\dev\\translate-api-and-ui\\single_document_translation.py', reloading
