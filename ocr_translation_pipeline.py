@@ -327,7 +327,7 @@ class OCRTranslationPipeline:
                     account_name=self.storage_account_name,
                     container_name=target_container,
                     account_key=self.storage_account_key,
-                    permission=ContainerSasPermissions(write=True, read=True, list=True),
+                    permission=ContainerSasPermissions(write=True, read=True, list=True, create=True, add=True),
                     expiry=datetime.utcnow() + timedelta(hours=24)
                 )
                 target_url = f"https://{self.storage_account_name}.blob.core.windows.net/{target_container}?{target_sas}"

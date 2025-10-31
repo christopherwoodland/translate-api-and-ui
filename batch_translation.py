@@ -251,7 +251,7 @@ class BatchDocumentTranslator:
                         account_name=self.storage_account_name,
                         container_name=target_container_name,
                         account_key=self.storage_account_key,
-                        permission=ContainerSasPermissions(write=True, read=True, list=True),
+                        permission=ContainerSasPermissions(write=True, read=True, list=True, create=True, add=True),
                         expiry=datetime.utcnow() + timedelta(hours=24)
                     )
                     target_container_url = f"https://{self.storage_account_name}.blob.core.windows.net/{target_container_name}?{target_sas_token}"

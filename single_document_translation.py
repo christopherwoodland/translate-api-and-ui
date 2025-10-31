@@ -253,7 +253,7 @@ class SingleDocumentTranslator:
                     account_name=self.storage_account_name,
                     container_name=target_container,
                     account_key=self.storage_account_key,
-                    permission=ContainerSasPermissions(write=True, read=True, list=True),
+                    permission=ContainerSasPermissions(write=True, read=True, list=True, create=True, add=True),
                     expiry=datetime.utcnow() + timedelta(hours=24)
                 )
                 
